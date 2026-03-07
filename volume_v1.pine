@@ -19,4 +19,4 @@ plot(vol_display, "Volume", color=vol_color, style=plot.style_columns)
 
 // 10-period MA on actual volume (not scaled), displayed as solid yellow line
 vol_ma = ta.sma(volume, ma_len)
-plot(vol_ma, "Vol MA " + str.tostring(ma_len), color=color.yellow, linewidth=2)
+plot(vol_ma, "Vol MA", color=color.yellow, linewidth=2)
