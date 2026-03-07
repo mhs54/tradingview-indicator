@@ -1,16 +1,13 @@
 // =============================================================================
 // Volume Indicator - v1.0
-// Identical to TradingView's built-in volume — add to chart then use
-// "Move to existing pane" to merge it into the price chart pane.
-// Bars are 10% larger than actual volume for easier readability.
-// Includes a solid yellow 10-period MA.
+// Add to chart then use "Move to existing pane" to merge into price chart pane.
 // =============================================================================
 //@version=6
 indicator("Volume", overlay=false)
 
 ma_len = input.int(10, "MA Length", minval=1)
 
-vol_color = close >= open ? color.new(color.green, 40) : color.new(color.red, 40)
+vol_color = close >= open ? color.new(color.green, 60) : color.new(color.red, 60)
 
-plot(volume * 0.5, "Volume", color=vol_color, style=plot.style_columns)
+plot(volume * 0.4, "Volume", color=vol_color, style=plot.style_columns)
 plot(ta.sma(volume, ma_len), "Vol MA", color=color.yellow, linewidth=2)
