@@ -1,75 +1,73 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v1.2
+// Day Trading Strategy Indicator - v1.4
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
-// NOTE: Support/resistance levels are drawn manually by the trader on the
-//       hourly chart before market open (solid yellow horizontal lines).
+// NOTE: S/R levels are drawn manually on the hourly chart before market open.
 // =============================================================================
 //@version=6
-indicator("Day Trading Strategy v1", overlay=true, max_lines_count=500, max_labels_count=500)
+indicator("Day Trading Strategy v1", overlay=true, max_lines_count=500, max_labels_count=200)
 
 // =============================================================================
 // INPUTS — MOVING AVERAGES
 // =============================================================================
 grp_sma = "Moving Averages"
 
-show_8      = input.bool(true,            "Show 8 SMA",          inline="8",   group=grp_sma)
-col_8       = input.color(color.blue,     "",                     inline="8",   group=grp_sma)
-width_8     = input.int(1,                "",  minval=1, maxval=4, inline="8",  group=grp_sma)
+show_8       = input.bool(true,          "Show 8 SMA",          inline="8",   group=grp_sma)
+col_8        = input.color(color.blue,   "",                    inline="8",   group=grp_sma)
+width_8      = input.int(1, "",          minval=1, maxval=4,    inline="8",   group=grp_sma)
 
-show_21     = input.bool(true,            "Show 21 SMA",          inline="21",  group=grp_sma)
-col_21      = input.color(color.purple,   "",                     inline="21",  group=grp_sma)
-width_21    = input.int(2,                "",  minval=1, maxval=4, inline="21", group=grp_sma)
+show_21      = input.bool(true,          "Show 21 SMA",         inline="21",  group=grp_sma)
+col_21       = input.color(color.purple, "",                    inline="21",  group=grp_sma)
+width_21     = input.int(2, "",          minval=1, maxval=4,    inline="21",  group=grp_sma)
 
-show_200_5m = input.bool(true,            "Show 5min 200 SMA",    inline="5m",  group=grp_sma)
-col_200_5m  = input.color(color.orange,   "",                     inline="5m",  group=grp_sma)
-width_200_5m= input.int(2,                "",  minval=1, maxval=4, inline="5m", group=grp_sma)
+show_200_5m  = input.bool(true,          "Show 5min 200 SMA",   inline="5m",  group=grp_sma)
+col_200_5m   = input.color(color.orange, "",                    inline="5m",  group=grp_sma)
+width_200_5m = input.int(2, "",          minval=1, maxval=4,    inline="5m",  group=grp_sma)
 
-show_200_10m= input.bool(true,            "Show 10min 200 SMA",   inline="10m", group=grp_sma)
-col_200_10m = input.color(color.yellow,   "",                     inline="10m", group=grp_sma)
-width_200_10m=input.int(2,                "",  minval=1, maxval=4, inline="10m",group=grp_sma)
+show_200_10m = input.bool(true,          "Show 10min 200 SMA",  inline="10m", group=grp_sma)
+col_200_10m  = input.color(color.yellow, "",                    inline="10m", group=grp_sma)
+width_200_10m= input.int(2, "",          minval=1, maxval=4,    inline="10m", group=grp_sma)
 
-show_200_1h = input.bool(true,            "Show Hourly 200 SMA",  inline="1h",  group=grp_sma)
-col_200_1h  = input.color(color.red,      "",                     inline="1h",  group=grp_sma)
-width_200_1h= input.int(2,                "",  minval=1, maxval=4, inline="1h", group=grp_sma)
+show_200_1h  = input.bool(true,          "Show Hourly 200 SMA", inline="1h",  group=grp_sma)
+col_200_1h   = input.color(color.red,    "",                    inline="1h",  group=grp_sma)
+width_200_1h = input.int(2, "",          minval=1, maxval=4,    inline="1h",  group=grp_sma)
 
 // =============================================================================
 // INPUTS — VWAP
 // =============================================================================
 grp_vwap   = "VWAP"
-show_vwap  = input.bool(true,           "Show VWAP", inline="vwap", group=grp_vwap)
-col_vwap   = input.color(color.teal,    "",          inline="vwap", group=grp_vwap)
-width_vwap = input.int(2,               "",  minval=1, maxval=4, inline="vwap", group=grp_vwap)
+show_vwap  = input.bool(true,         "Show VWAP", inline="vwap", group=grp_vwap)
+col_vwap   = input.color(color.teal,  "",          inline="vwap", group=grp_vwap)
+width_vwap = input.int(2, "",         minval=1, maxval=4, inline="vwap", group=grp_vwap)
 
 // =============================================================================
 // INPUTS — PRE-MARKET LEVELS
 // =============================================================================
-grp_pm    = "Pre-Market Levels"
-show_pm   = input.bool(true,          "Show PMH / PML lines", group=grp_pm)
-col_pm    = input.color(color.white,  "Line color",           group=grp_pm)
+grp_pm   = "Pre-Market Levels"
+show_pm  = input.bool(true,         "Show PMH / PML (last 5 days)", group=grp_pm)
+col_pm   = input.color(color.white, "Line color",                   group=grp_pm)
 
 // =============================================================================
 // INPUTS — PATIENCE CANDLE
 // =============================================================================
-grp_pc     = "Patience Candle"
-show_pc    = input.bool(true,  "Highlight Patience Candle", group=grp_pc)
-show_entry = input.bool(true,  "Show Entry / Stop Lines",   group=grp_pc)
-rr_min     = input.float(1.0,  "Min R:R Ratio", minval=0.5, step=0.1, group=grp_pc)
+grp_pc    = "Patience Candle"
+show_pc   = input.bool(true, "Show Patience Candle Arrows", group=grp_pc)
+retrace_pct = input.float(40.0, "Retracement % to suppress signals", minval=10, maxval=60, step=5, group=grp_pc)
 
 // =============================================================================
 // MOVING AVERAGES
 // =============================================================================
-sma8     = ta.sma(close, 8)
-sma21    = ta.sma(close, 21)
+sma8      = ta.sma(close, 8)
+sma21     = ta.sma(close, 21)
 sma200_5m  = request.security(syminfo.tickerid, "5",  ta.sma(close, 200))
 sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
 sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
 
-plot(show_8       ? sma8       : na, "8 SMA",          color=col_8,       linewidth=width_8)
-plot(show_21      ? sma21      : na, "21 SMA",         color=col_21,      linewidth=width_21)
-plot(show_200_5m  ? sma200_5m  : na, "5min 200 SMA",   color=col_200_5m,  linewidth=width_200_5m)
-plot(show_200_10m ? sma200_10m : na, "10min 200 SMA",  color=col_200_10m, linewidth=width_200_10m)
-plot(show_200_1h  ? sma200_1h  : na, "Hourly 200 SMA", color=col_200_1h,  linewidth=width_200_1h)
+plot(show_8       ? sma8       : na, "8 SMA",          color=col_8,        linewidth=width_8)
+plot(show_21      ? sma21      : na, "21 SMA",         color=col_21,       linewidth=width_21)
+plot(show_200_5m  ? sma200_5m  : na, "5min 200 SMA",   color=col_200_5m,   linewidth=width_200_5m)
+plot(show_200_10m ? sma200_10m : na, "10min 200 SMA",  color=col_200_10m,  linewidth=width_200_10m)
+plot(show_200_1h  ? sma200_1h  : na, "Hourly 200 SMA", color=col_200_1h,   linewidth=width_200_1h)
 
 // =============================================================================
 // VWAP
@@ -85,7 +83,7 @@ is_regular   = not na(time("1", "0930-1600:23456"))
 session_open = not na(time("1", "0930-0931:23456"))
 
 // =============================================================================
-// PRE-MARKET HIGH / LOW  — solid lines, no box
+// PRE-MARKET HIGH / LOW — last 5 trading days, each scoped to its own day
 // =============================================================================
 var float pm_high        = na
 var float pm_low         = na
@@ -108,31 +106,44 @@ if is_premarket
 float pmh = pm_locked ? pm_high_locked : pm_high
 float pml = pm_locked ? pm_low_locked  : pm_low
 
-// Draw solid horizontal lines at PMH / PML — one pair per day, scoped to that day.
-// Old lines are NOT deleted so they remain visible when scrolling back through history.
-// Only the current day's lines have their right edge advanced each bar.
-var line pmh_line_cur = na  // reference to today's PMH line (for x2 extension)
-var line pml_line_cur = na  // reference to today's PML line (for x2 extension)
+// Arrays to hold per-day lines and labels (capped at 5 days = 10 lines, 10 labels)
+var line[]  pmh_lines  = array.new<line>()
+var line[]  pml_lines  = array.new<line>()
+var label[] pmh_labels = array.new<label>()
+var label[] pml_labels = array.new<label>()
+var line    pmh_cur    = na  // current day's line (extended each bar)
+var line    pml_cur    = na
+
+int max_days = 5
 
 if show_pm and session_open
-    pmh_line_cur := line.new(bar_index, pmh, bar_index + 1, pmh,
-         color=col_pm, width=1, style=line.style_solid)
-    pml_line_cur := line.new(bar_index, pml, bar_index + 1, pml,
-         color=col_pm, width=1, style=line.style_solid)
+    // Create today's lines
+    line new_pmh = line.new(bar_index, pmh, bar_index + 1, pmh, color=col_pm, width=1, style=line.style_solid)
+    line new_pml = line.new(bar_index, pml, bar_index + 1, pml, color=col_pm, width=1, style=line.style_solid)
+    array.push(pmh_lines, new_pmh)
+    array.push(pml_lines, new_pml)
+    pmh_cur := new_pmh
+    pml_cur := new_pml
 
-// Advance right edge bar-by-bar within session; stops naturally at close
-if show_pm and is_regular and not na(pmh_line_cur)
-    line.set_x2(pmh_line_cur, bar_index)
-    line.set_x2(pml_line_cur, bar_index)
+    // Create labels for today
+    label lh = label.new(bar_index, pmh, "PMH " + str.tostring(pmh, "#.##"),
+         color=color.new(color.white, 100), textcolor=col_pm, size=size.small, style=label.style_label_right)
+    label ll = label.new(bar_index, pml, "PML " + str.tostring(pml, "#.##"),
+         color=color.new(color.white, 100), textcolor=col_pm, size=size.small, style=label.style_label_right)
+    array.push(pmh_labels, lh)
+    array.push(pml_labels, ll)
 
-// Labels — one per day at session open, preserved historically
-if show_pm and session_open
-    label.new(bar_index, pmh, "PMH " + str.tostring(pmh, "#.##"),
-         color=color.new(color.white, 100), textcolor=col_pm,
-         size=size.small, style=label.style_label_right)
-    label.new(bar_index, pml, "PML " + str.tostring(pml, "#.##"),
-         color=color.new(color.white, 100), textcolor=col_pm,
-         size=size.small, style=label.style_label_right)
+    // Prune anything beyond 5 days
+    while array.size(pmh_lines) > max_days
+        line.delete(array.shift(pmh_lines))
+        line.delete(array.shift(pml_lines))
+        label.delete(array.shift(pmh_labels))
+        label.delete(array.shift(pml_labels))
+
+// Extend current day's lines rightward through the session; stops at close
+if show_pm and is_regular and not na(pmh_cur)
+    line.set_x2(pmh_cur, bar_index)
+    line.set_x2(pml_cur, bar_index)
 
 // =============================================================================
 // TREND DIRECTION (PM breakout)
@@ -170,23 +181,61 @@ if is_regular
         swing_low_price  := low[swing_len]
 
 // =============================================================================
+// 40% RETRACEMENT SUPPRESSION
+// Tracks running session high (for longs) and session low (for shorts).
+// If price retraces retrace_pct% of the move from the PM breakout level,
+// patience candle arrows are suppressed until a new session high/low is made.
+// =============================================================================
+float retrace_threshold = retrace_pct / 100.0
+
+var float day_high   = na   // running high since upside PM breakout
+var float day_low    = na   // running low since downside PM breakout
+var bool  long_suppressed  = false
+var bool  short_suppressed = false
+
+if session_open
+    day_high          := na
+    day_low           := na
+    long_suppressed   := false
+    short_suppressed  := false
+
+if is_regular and trend_dir == 1 and not na(pmh)
+    // New session high → reset suppression
+    if not na(day_high) and high > day_high
+        long_suppressed := false
+    day_high := na(day_high) ? high : math.max(day_high, high)
+    // Check retracement: how far has price pulled back from session high vs the full move
+    float move = day_high - pmh
+    if move > 0 and (day_high - low) / move >= retrace_threshold
+        long_suppressed := true
+
+if is_regular and trend_dir == -1 and not na(pml)
+    // New session low → reset suppression
+    if not na(day_low) and low < day_low
+        short_suppressed := false
+    day_low := na(day_low) ? low : math.min(day_low, low)
+    // Check retracement: how far has price bounced from session low vs the full move
+    float move_s = pml - day_low
+    if move_s > 0 and (high - day_low) / move_s >= retrace_threshold
+        short_suppressed := true
+
+// =============================================================================
 // PATIENCE CANDLE DETECTION
 // Rules:
-//   - Regular session only (no pre-market / after-hours)
-//   - Long setups ONLY when price is above PMH (true uptrend, not reversal)
-//   - Short setups ONLY when price is below PML (true downtrend, not reversal)
-//   - No signals inside the pre-market range
-//   - Long:  pullback candle high <= recent swing high (contained upside)
-//   - Short: pullback candle low  >= recent swing low  (contained downside)
+//   - Regular session only
+//   - Long ONLY when above PMH (trend, not reversal)
+//   - Short ONLY when below PML (trend, not reversal)
+//   - Suppressed when price has retraced retrace_pct% from session high/low
+//   - Long:  pullback candle high <= swing high (contained upside)
+//   - Short: pullback candle low  >= swing low  (contained downside)
 // =============================================================================
 var float pc_high  = na
 var float pc_low   = na
 var bool  valid_pc = false
 var bool  pc_long  = false
 
-// Gate: must be regular session, broken out of PM range, and trending with the move
-bool can_long  = is_regular and trend_dir == 1  and not na(pmh) and close > pmh
-bool can_short = is_regular and trend_dir == -1 and not na(pml) and close < pml
+bool can_long  = is_regular and trend_dir == 1  and not na(pmh) and close > pmh and not long_suppressed
+bool can_short = is_regular and trend_dir == -1 and not na(pml) and close < pml and not short_suppressed
 
 bool in_pullback_long  = can_long  and not na(swing_high_price) and close < swing_high_price
 bool in_pullback_short = can_short and not na(swing_low_price)  and close > swing_low_price
@@ -209,55 +258,13 @@ else if not in_pullback_long and not in_pullback_short
     pc_high  := na
     pc_low   := na
 
-// Patience candle arrows — only on 2, 5, and 10 min charts
+// Arrows — only on 2, 5, and 10 min charts
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
 
 plotshape(show_pc and valid_tf and pc_long_valid,  "Long PC",  shape.arrowup,
-     location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+     location.belowbar, color=color.new(color.green, 0), size=size.small)
 plotshape(show_pc and valid_tf and pc_short_valid, "Short PC", shape.arrowdown,
-     location.abovebar, color=color.new(color.red, 0),   size=size.tiny)
-
-// =============================================================================
-// ENTRY / STOP LINES + R:R LABEL
-// =============================================================================
-var line  entry_line = na
-var line  stop_line  = na
-var label rr_label   = na
-
-if valid_pc and show_entry
-    float entry_price = pc_long ? pc_high : pc_low
-    float stop_price  = pc_long ? pc_low  : pc_high
-    float pc_range    = pc_high - pc_low
-
-    // R:R target: distance to nearest 200 SMA (use hourly as primary reference)
-    float target_dist = math.abs(sma200_1h - entry_price)
-    if pc_long  and sma200_1h < entry_price
-        target_dist := math.abs(pmh - entry_price) * 2
-    if not pc_long and sma200_1h > entry_price
-        target_dist := math.abs(pml - entry_price) * 2
-
-    float rr    = pc_range > 0 ? target_dist / pc_range : 0.0
-    bool  rr_ok = rr >= rr_min
-
-    line.delete(entry_line)
-    entry_line := line.new(bar_index - 1, entry_price, bar_index + 5, entry_price,
-         color=rr_ok ? color.new(color.green, 0) : color.new(color.gray, 50),
-         width=2, style=line.style_dashed)
-
-    line.delete(stop_line)
-    stop_line := line.new(bar_index - 1, stop_price, bar_index + 5, stop_price,
-         color=color.new(color.red, 0), width=2, style=line.style_dashed)
-
-    label.delete(rr_label)
-    string rr_text = (rr_ok ? "SETUP  " : "SKIP  ") +
-         "Entry: "    + str.tostring(entry_price, "#.##") + "\n" +
-         "Stop: "     + str.tostring(stop_price,  "#.##") + "\n" +
-         "PC Range: " + str.tostring(pc_range,    "#.##") + "\n" +
-         "R:R ~"      + str.tostring(rr,           "#.#") + "R"
-    rr_label := label.new(bar_index + 1, entry_price, text=rr_text,
-         color=rr_ok ? color.new(color.green, 70) : color.new(color.gray, 70),
-         textcolor=rr_ok ? color.green : color.gray,
-         style=label.style_label_left, size=size.small)
+     location.abovebar, color=color.new(color.red, 0),   size=size.small)
 
 // =============================================================================
 // ALERTS
