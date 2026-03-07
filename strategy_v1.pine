@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v2.8
+// Day Trading Strategy Indicator - v2.9
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -180,14 +180,16 @@ if below_ref and trend_dir == 0
 // =============================================================================
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
 
-bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1  and high <  high[1] and close > ref_high
-bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and low  >  low[1]  and close < ref_low
+// Entry for long is above PC high — valid if PC high is above ref_high (entry outside PM zone)
+// Entry for short is below PC low — valid if PC low is below ref_low (entry outside PM zone)
+bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1  and high <  high[1] and high > ref_high
+bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and low  >  low[1]  and low  < ref_low
 bool pc_long_done   = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
 bool pc_short_done  = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
 
 // Filled triangle arrow — width = 2 bars, height = 0.95x ATR, gap from candle = 0.15x ATR
 float atr_val  = ta.atr(14)
-float tri_h    = atr_val * 0.95   // 5% smaller than full ATR
+float tri_h    = atr_val * 0.90   // 10% smaller than full ATR
 float tri_gap  = atr_val * 0.15   // separation so triangle doesn't touch the candle
 
 var polyline pc_poly = na
