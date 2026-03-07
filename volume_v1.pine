@@ -1,13 +1,20 @@
 // =============================================================================
-// Volume Indicator - v1.0
-// Add to chart then use "Move to existing pane" to merge into price chart pane.
+// Volume Indicator
+// Add to chart then "Move to existing pane" to merge into price chart pane.
 // =============================================================================
 //@version=6
 indicator("Volume", overlay=false)
 
 ma_len = input.int(10, "MA Length", minval=1)
 
+float scale_factor = 0.3
+
 vol_color = close >= open ? color.new(color.green, 60) : color.new(color.red, 60)
 
-plot(volume * 0.4, "Volume", color=vol_color, style=plot.style_columns)
-plot(ta.sma(volume, ma_len), "Vol MA", color=color.yellow, linewidth=2)
+// Anchor scale minimum at 0 — prevents negative volume axis
+hline(0, color=color.new(color.white, 0), linestyle=hline.style_solid, linewidth=1)
+
+plot(volume * scale_factor, "Volume", color=vol_color, style=plot.style_columns)
+
+// MA scaled by same factor so it overlays correctly on the bars
+plot(ta.sma(volume, ma_len) * scale_factor, "Vol MA", color=color.yellow, linewidth=2)
