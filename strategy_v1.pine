@@ -1,11 +1,11 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v2.6
+// Day Trading Strategy Indicator - v2.7
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
 // =============================================================================
 //@version=6
-indicator("Day Trading Strategy v1", overlay=true, max_lines_count=500, max_labels_count=500)
+indicator("Day Trading Strategy v1", overlay=true, max_lines_count=500, max_labels_count=500, max_polylines_count=100)
 
 // =============================================================================
 // INPUTS — MOVING AVERAGES
@@ -185,29 +185,42 @@ bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and low  >  lo
 bool pc_long_done   = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
 bool pc_short_done  = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
 
-var label pc_label = na
+// Filled triangle arrow — width = 2 bars, height = 1x ATR
+float atr_val = ta.atr(14)
+
+var polyline pc_poly = na
 
 // Session open: wipe slate clean
 if session_open
-    label.delete(pc_label)
-    pc_label := na
+    polyline.delete(pc_poly)
+    pc_poly := na
 
-// Breakout: forget reference without deleting — arrow freezes as historical marker
+// Breakout: forget reference without deleting — triangle freezes as historical marker
 if pc_long_done or pc_short_done
-    pc_label := na
+    pc_poly := na
 
-// PC bar: delete and recreate — arrow always on the most recent contained bar
+// PC bar: delete and recreate — triangle always on the most recent contained bar
 if show_pc and pc_long_valid
-    label.delete(pc_label)
-    pc_label := label.new(bar_index, low, "",
-         style=label.style_arrowup, yloc=yloc.belowbar,
-         color=color.new(color.green, 0), size=size.huge)
+    polyline.delete(pc_poly)
+    pc_poly := polyline.new(
+         array.from(
+             chart.point.from_index(bar_index,     low),
+             chart.point.from_index(bar_index - 1, low - atr_val),
+             chart.point.from_index(bar_index + 1, low - atr_val)),
+         closed=true,
+         fill_color=color.new(color.green, 0),
+         line_color=color.new(color.green, 0))
 
 else if show_pc and pc_short_valid
-    label.delete(pc_label)
-    pc_label := label.new(bar_index, high, "",
-         style=label.style_arrowdown, yloc=yloc.abovebar,
-         color=color.new(color.red, 0), size=size.huge)
+    polyline.delete(pc_poly)
+    pc_poly := polyline.new(
+         array.from(
+             chart.point.from_index(bar_index,     high),
+             chart.point.from_index(bar_index - 1, high + atr_val),
+             chart.point.from_index(bar_index + 1, high + atr_val)),
+         closed=true,
+         fill_color=color.new(color.red, 0),
+         line_color=color.new(color.red, 0))
 
 // =============================================================================
 // ALERTS
