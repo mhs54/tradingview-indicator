@@ -3,78 +3,72 @@
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // =============================================================================
-//@version=5
+//@version=6
 indicator("Day Trading Strategy v1", overlay=true, max_lines_count=500, max_labels_count=500, max_boxes_count=100)
 
 // =============================================================================
 // INPUTS
 // =============================================================================
-grp_sma     = "Moving Averages"
-show_8      = input.bool(true,  "Show 8 SMA",          group=grp_sma)
-show_21     = input.bool(true,  "Show 21 SMA",         group=grp_sma)
-show_5      = input.bool(true,  "Show 5 SMA (always)", group=grp_sma)
-show_10     = input.bool(true,  "Show 10 SMA (always)",group=grp_sma)
-show_200h   = input.bool(true,  "Show Hourly 200 SMA", group=grp_sma)
+grp_sma    = "Moving Averages"
+show_8     = input.bool(true,  "Show 8 SMA",           group=grp_sma)
+show_21    = input.bool(true,  "Show 21 SMA",          group=grp_sma)
+show_5     = input.bool(true,  "Show 5 SMA (always)",  group=grp_sma)
+show_10    = input.bool(true,  "Show 10 SMA (always)", group=grp_sma)
+show_200h  = input.bool(true,  "Show Hourly 200 SMA",  group=grp_sma)
 
-grp_vwap    = "VWAP"
-show_vwap   = input.bool(true,  "Show VWAP",           group=grp_vwap)
+grp_vwap   = "VWAP"
+show_vwap  = input.bool(true,  "Show VWAP",            group=grp_vwap)
 
-grp_pm      = "Pre-Market"
-show_pm     = input.bool(true,  "Show Pre-Market Range",group=grp_pm)
+grp_pm     = "Pre-Market"
+show_pm    = input.bool(true,  "Show Pre-Market Range", group=grp_pm)
 
-grp_pc      = "Patience Candle"
-show_pc     = input.bool(true,  "Highlight Patience Candle", group=grp_pc)
-show_entry  = input.bool(true,  "Show Entry/Stop Lines",     group=grp_pc)
-rr_min      = input.float(1.0,  "Min R:R Ratio",        minval=0.5, step=0.1, group=grp_pc)
+grp_pc     = "Patience Candle"
+show_pc    = input.bool(true,  "Highlight Patience Candle",  group=grp_pc)
+show_entry = input.bool(true,  "Show Entry/Stop Lines",      group=grp_pc)
+rr_min     = input.float(1.0,  "Min R:R Ratio", minval=0.5, step=0.1, group=grp_pc)
 
-grp_fib     = "Fibonacci"
-show_fib    = input.bool(true,  "Show 0.5 Fib Invalidation Level", group=grp_fib)
+grp_fib    = "Fibonacci"
+show_fib   = input.bool(true,  "Show 0.5 Fib Invalidation Level", group=grp_fib)
 
 // =============================================================================
 // MOVING AVERAGES
 // =============================================================================
-sma5   = ta.sma(close, 5)
-sma8   = ta.sma(close, 8)
-sma10  = ta.sma(close, 10)
-sma21  = ta.sma(close, 21)
+sma5    = ta.sma(close, 5)
+sma8    = ta.sma(close, 8)
+sma10   = ta.sma(close, 10)
+sma21   = ta.sma(close, 21)
 
-// Hourly 200 SMA — always displayed regardless of current timeframe
-sma200h = request.security(syminfo.tickerid, "60", ta.sma(close, 200), lookahead=barmerge.lookahead_off)
+// Hourly 200 SMA — always displayed regardless of current chart timeframe
+sma200h = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
 
-plot(show_5   ? sma5    : na, "5 SMA",        color=color.new(color.gray,   20), linewidth=1)
-plot(show_8   ? sma8    : na, "8 SMA",        color=color.new(color.blue,   10), linewidth=1)
-plot(show_10  ? sma10   : na, "10 SMA",       color=color.new(color.orange, 10), linewidth=1)
-plot(show_21  ? sma21   : na, "21 SMA",       color=color.new(color.purple, 10), linewidth=2)
-plot(show_200h? sma200h : na, "Hourly 200 SMA", color=color.new(color.red,  0),  linewidth=2, style=plot.style_circles)
+plot(show_5    ? sma5    : na, "5 SMA",          color=color.new(color.gray,   20), linewidth=1)
+plot(show_8    ? sma8    : na, "8 SMA",          color=color.new(color.blue,   10), linewidth=1)
+plot(show_10   ? sma10   : na, "10 SMA",         color=color.new(color.orange, 10), linewidth=1)
+plot(show_21   ? sma21   : na, "21 SMA",         color=color.new(color.purple, 10), linewidth=2)
+plot(show_200h ? sma200h : na, "Hourly 200 SMA", color=color.new(color.red,     0), linewidth=2, style=plot.style_circles)
 
 // =============================================================================
-// VWAP
+// VWAP (session reset daily)
 // =============================================================================
-[vwap_val, _, _] = ta.vwap(hlc3, false, 1)
+vwap_val = ta.vwap(hlc3)
 plot(show_vwap ? vwap_val : na, "VWAP", color=color.new(color.teal, 0), linewidth=2)
 
 // =============================================================================
 // SESSION DETECTION
-// Regular session: 0930-1600 ET
-// Pre-market:      0400-0930 ET
 // =============================================================================
-is_premarket    = not na(time("1", "0400-0930:23456"))
-is_regular      = not na(time("1", "0930-1600:23456"))
-
-// Time zones — track session open bar
-session_open    = not na(time("1", "0930-0931:23456"))
+is_premarket = not na(time("1", "0400-0930:23456"))
+is_regular   = not na(time("1", "0930-1600:23456"))
+session_open = not na(time("1", "0930-0931:23456"))
 
 // =============================================================================
 // PRE-MARKET HIGH / LOW
-// Calculated from pre-market session, displayed as horizontal lines
 // =============================================================================
-var float pm_high = na
-var float pm_low  = na
+var float pm_high        = na
+var float pm_low         = na
 var float pm_high_locked = na
 var float pm_low_locked  = na
-var bool  pm_locked = false
+var bool  pm_locked      = false
 
-// Reset at start of each trading day
 if session_open and not session_open[1]
     pm_high_locked := pm_high
     pm_low_locked  := pm_low
@@ -83,15 +77,14 @@ if session_open and not session_open[1]
     pm_locked      := true
 
 if is_premarket
-    pm_high := na(pm_high) ? high : math.max(pm_high, high)
-    pm_low  := na(pm_low)  ? low  : math.min(pm_low,  low)
+    pm_high   := na(pm_high) ? high : math.max(pm_high, high)
+    pm_low    := na(pm_low)  ? low  : math.min(pm_low,  low)
     pm_locked := false
 
-// Use locked values during regular session
 float pmh = pm_locked ? pm_high_locked : pm_high
 float pml = pm_locked ? pm_low_locked  : pm_low
 
-// Draw pre-market range box
+// Pre-market range box
 var box pm_box = na
 if show_pm and session_open
     box.delete(pm_box)
@@ -100,58 +93,55 @@ if show_pm and session_open
          bgcolor=color.new(color.yellow, 88),
          border_width=1)
 
-// Extend box right each bar
 if show_pm and is_regular and not na(pm_box)
     box.set_right(pm_box, bar_index + 10)
 
-// Labels for PM levels
+// PMH / PML labels
 var label pmh_label = na
 var label pml_label = na
 if show_pm and session_open
     label.delete(pmh_label)
     label.delete(pml_label)
     pmh_label := label.new(bar_index, pmh, "PMH: " + str.tostring(pmh, "#.##"),
-         color=color.new(color.yellow, 70), textcolor=color.yellow, size=size.small, style=label.style_label_right)
+         color=color.new(color.yellow, 70), textcolor=color.yellow,
+         size=size.small, style=label.style_label_right)
     pml_label := label.new(bar_index, pml, "PML: " + str.tostring(pml, "#.##"),
-         color=color.new(color.yellow, 70), textcolor=color.yellow, size=size.small, style=label.style_label_right)
+         color=color.new(color.yellow, 70), textcolor=color.yellow,
+         size=size.small, style=label.style_label_right)
 
 // =============================================================================
-// TREND DETECTION
-// Trend is established when price breaks out of pre-market range
+// TREND DIRECTION (PM breakout)
 // =============================================================================
 bool above_pm = not na(pmh) and close > pmh
 bool below_pm = not na(pml) and close < pml
 
-// Track breakout state for the session
-var int trend_dir = 0  // 1 = long bias, -1 = short bias, 0 = inside range
+var int trend_dir = 0  // 1 = long bias | -1 = short bias | 0 = inside range
+
 if session_open
     trend_dir := 0
-
 if above_pm and trend_dir == 0
     trend_dir := 1
 if below_pm and trend_dir == 0
     trend_dir := -1
 
 // =============================================================================
-// SWING HIGH / LOW DETECTION (for patience candle logic)
-// A swing high: current high > recent N bars
+// SWING HIGH / LOW DETECTION
 // =============================================================================
-swing_len = 3
+int swing_len = 3
 
 bool is_swing_high = high == ta.highest(high, swing_len * 2 + 1)
 bool is_swing_low  = low  == ta.lowest( low,  swing_len * 2 + 1)
 
-// Track the most recent confirmed swing high/low after PM breakout
 var float swing_high_price = na
 var float swing_low_price  = na
-var int   swing_high_bar   = na
-var int   swing_low_bar    = na
+var int   swing_high_bar   = 0
+var int   swing_low_bar    = 0
 
 if session_open
     swing_high_price := na
     swing_low_price  := na
-    swing_high_bar   := na
-    swing_low_bar    := na
+    swing_high_bar   := 0
+    swing_low_bar    := 0
 
 if is_regular
     if trend_dir == 1 and is_swing_high
@@ -163,32 +153,25 @@ if is_regular
 
 // =============================================================================
 // FIBONACCI 0.5 INVALIDATION
-// For longs:  fib from last significant low to swing high
-// For shorts: fib from last significant high to swing low
-// If price retraces to 0.5 fib — setup invalidated
 // =============================================================================
-var float fib_base_high = na
-var float fib_base_low  = na
 var float fib_50_level  = na
 var bool  fib_invalidated = false
 
 if session_open
     fib_invalidated := false
+    fib_50_level    := na
 
-// Update fib anchor when new swing is established
-if trend_dir == 1 and not na(swing_high_price)
-    // Anchor: lowest low since PM breakout to swing high
-    lookback = bar_index - swing_high_bar
-    fib_base_low  := ta.lowest(low, math.max(lookback, 1))
-    fib_50_level  := fib_base_low + (swing_high_price - fib_base_low) * 0.5
+if trend_dir == 1 and not na(swing_high_price) and swing_high_bar > 0
+    int lookback_long    = math.max(bar_index - swing_high_bar, 1)
+    float fib_base_low   = ta.lowest(low, lookback_long)
+    fib_50_level        := fib_base_low + (swing_high_price - fib_base_low) * 0.5
 
-if trend_dir == -1 and not na(swing_low_price)
-    lookback = bar_index - swing_low_bar
-    fib_base_high := ta.highest(high, math.max(lookback, 1))
-    fib_50_level  := fib_base_high - (fib_base_high - swing_low_price) * 0.5
+if trend_dir == -1 and not na(swing_low_price) and swing_low_bar > 0
+    int lookback_short   = math.max(bar_index - swing_low_bar, 1)
+    float fib_base_high  = ta.highest(high, lookback_short)
+    fib_50_level        := fib_base_high - (fib_base_high - swing_low_price) * 0.5
 
-// Check if price touched 0.5 fib
-if trend_dir == 1 and not na(fib_50_level) and low <= fib_50_level
+if trend_dir == 1  and not na(fib_50_level) and low  <= fib_50_level
     fib_invalidated := true
 if trend_dir == -1 and not na(fib_50_level) and high >= fib_50_level
     fib_invalidated := true
@@ -198,25 +181,21 @@ plot(show_fib and not na(fib_50_level) ? fib_50_level : na, "0.5 Fib Invalidatio
 
 // =============================================================================
 // PATIENCE CANDLE DETECTION
-// After swing high (long): pullback candle where high <= swing_high_price
-// After swing low (short): pullback candle where low  >= swing_low_price
-// Setup invalid if .5 fib triggered
+// Long:  pullback candle whose high <= recent swing high  (contained upside)
+// Short: pullback candle whose low  >= recent swing low   (contained downside)
 // =============================================================================
-var float pc_high  = na
-var float pc_low   = na
+var float pc_high = na
+var float pc_low  = na
 var bool  valid_pc = false
-var bool  pc_long  = false  // direction of setup
+var bool  pc_long  = false
 
-bool in_pullback_long  = trend_dir == 1 and not na(swing_high_price) and close < swing_high_price and not fib_invalidated
-bool in_pullback_short = trend_dir == -1 and not na(swing_low_price) and close > swing_low_price and not fib_invalidated
+bool in_pullback_long  = trend_dir == 1  and not na(swing_high_price) and close < swing_high_price and not fib_invalidated
+bool in_pullback_short = trend_dir == -1 and not na(swing_low_price)  and close > swing_low_price  and not fib_invalidated
 
-// Long patience candle: high of pullback candle <= swing high
 bool pc_long_valid  = in_pullback_long  and high <= swing_high_price
-// Short patience candle: low of pullback candle >= swing low
 bool pc_short_valid = in_pullback_short and low  >= swing_low_price
 
-// The MOST RECENT valid patience candle is what we track
-// (multiple PC pullback — each new candle refreshes)
+// Refresh PC each bar while in pullback (each new candle becomes the active PC)
 if pc_long_valid
     pc_high  := high
     pc_low   := low
@@ -232,54 +211,48 @@ else if not in_pullback_long and not in_pullback_short
     pc_high  := na
     pc_low   := na
 
-// Highlight patience candles
-bgcolor(show_pc and pc_long_valid  ? color.new(color.green, 85) : na, title="PC Long Background")
-bgcolor(show_pc and pc_short_valid ? color.new(color.red,   85) : na, title="PC Short Background")
+// Candle background highlight for active patience candle
+bgcolor(show_pc and pc_long_valid  ? color.new(color.green, 85) : na, title="PC Long BG")
+bgcolor(show_pc and pc_short_valid ? color.new(color.red,   85) : na, title="PC Short BG")
 
 // =============================================================================
-// ENTRY / STOP LINES + R:R FILTER
-// Entry: above PC high (long) or below PC low (short)
-// Stop:  PC low (long) or PC high (short)
-// Next level distance must be >= PC range for valid R:R
+// ENTRY / STOP LINES + R:R LABEL
 // =============================================================================
-var line entry_line = na
-var line stop_line  = na
-var label rr_label  = na
+var line  entry_line = na
+var line  stop_line  = na
+var label rr_label   = na
 
 if valid_pc and show_entry
     float entry_price = pc_long ? pc_high : pc_low
     float stop_price  = pc_long ? pc_low  : pc_high
     float pc_range    = pc_high - pc_low
 
-    // For R:R we use next key level (200h SMA as proxy if nearby, else next PM level)
-    float target_dist = pc_long ? math.abs(sma200h - entry_price) : math.abs(entry_price - sma200h)
-    // Use PM level as target if 200h SMA is behind us
-    if pc_long and sma200h < entry_price
-        target_dist := math.abs(pmh - entry_price) * 2  // fallback: 2x pm range
+    // Target distance: use hourly 200 SMA as nearest significant level proxy
+    // Falls back to 2x PM range distance if 200h SMA is behind current price
+    float target_dist = math.abs(sma200h - entry_price)
+    if pc_long  and sma200h < entry_price
+        target_dist := math.abs(pmh - entry_price) * 2
     if not pc_long and sma200h > entry_price
         target_dist := math.abs(pml - entry_price) * 2
 
-    float rr = pc_range > 0 ? target_dist / pc_range : 0
+    float rr   = pc_range > 0 ? target_dist / pc_range : 0.0
     bool  rr_ok = rr >= rr_min
 
-    // Draw entry line
     line.delete(entry_line)
     entry_line := line.new(bar_index - 1, entry_price, bar_index + 5, entry_price,
          color=rr_ok ? color.new(color.green, 0) : color.new(color.gray, 40),
          width=2, style=line.style_dashed)
 
-    // Draw stop line
     line.delete(stop_line)
     stop_line := line.new(bar_index - 1, stop_price, bar_index + 5, stop_price,
          color=color.new(color.red, 0), width=2, style=line.style_dashed)
 
-    // R:R label
     label.delete(rr_label)
-    string rr_text = (rr_ok ? "✓ SETUP  " : "✗ SKIP  ") +
-         "Entry: " + str.tostring(entry_price, "#.##") + "\n" +
-         "Stop: "  + str.tostring(stop_price,  "#.##") + "\n" +
-         "PC Range: " + str.tostring(pc_range, "#.##") + "\n" +
-         "R:R ~" + str.tostring(rr, "#.#") + "R"
+    string rr_text = (rr_ok ? "SETUP  " : "SKIP  ") +
+         "Entry: "    + str.tostring(entry_price, "#.##") + "\n" +
+         "Stop: "     + str.tostring(stop_price,  "#.##") + "\n" +
+         "PC Range: " + str.tostring(pc_range,    "#.##") + "\n" +
+         "R:R ~"      + str.tostring(rr,           "#.#") + "R"
     rr_label := label.new(bar_index + 1, entry_price,
          text=rr_text,
          color=rr_ok ? color.new(color.green, 70) : color.new(color.gray, 70),
@@ -294,7 +267,7 @@ plotshape(fib_invalidated and not fib_invalidated[1], "Fib Invalidated",
      color=color.new(color.red, 0), size=size.small)
 
 // =============================================================================
-// TREND STATE BACKGROUND (subtle)
+// SUBTLE TREND BACKGROUND
 // =============================================================================
 bgcolor(is_regular and trend_dir == 1  ? color.new(color.green, 97) : na, title="Long Trend BG")
 bgcolor(is_regular and trend_dir == -1 ? color.new(color.red,   97) : na, title="Short Trend BG")
@@ -304,20 +277,20 @@ bgcolor(is_regular and trend_dir == -1 ? color.new(color.red,   97) : na, title=
 // =============================================================================
 alertcondition(pc_long_valid  and not pc_long_valid[1],
      "Patience Candle - LONG Setup",
-     "Long patience candle forming. Entry above {{plot_0}}, Stop below PC low.")
+     "Long patience candle forming. Entry above PC high, stop below PC low.")
 
 alertcondition(pc_short_valid and not pc_short_valid[1],
      "Patience Candle - SHORT Setup",
-     "Short patience candle forming. Entry below {{plot_0}}, Stop above PC high.")
+     "Short patience candle forming. Entry below PC low, stop above PC high.")
 
 alertcondition(fib_invalidated and not fib_invalidated[1],
      "Setup INVALIDATED - 0.5 Fib Hit",
-     "Price hit 0.5 Fibonacci retracement. Wait for new swing before re-entry.")
+     "Price hit 0.5 Fib retracement. Wait for new swing high/low before re-entry.")
 
 alertcondition(above_pm and not above_pm[1],
      "PM Breakout - LONG",
-     "Price broke above pre-market high. Watching for trend + patience candle setup.")
+     "Price broke above pre-market high. Watching for patience candle setup.")
 
 alertcondition(below_pm and not below_pm[1],
      "PM Breakout - SHORT",
-     "Price broke below pre-market low. Watching for trend + patience candle setup.")
+     "Price broke below pre-market low. Watching for patience candle setup.")
