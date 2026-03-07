@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v2.4
+// Day Trading Strategy Indicator - v2.5
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -173,18 +173,41 @@ if below_ref and trend_dir == 0
 // Long:  in uptrend, current bar's high did NOT break the previous bar's high
 // Short: in downtrend, current bar's low did NOT break the previous bar's low
 //
-// Setup is over the moment the previous bar's high/low is broken.
+// Arrow slides to the most recent PC bar. When the prior high/low is broken
+// (setup over), the arrow locks in place permanently as a historical marker.
+// Next pullback starts a fresh arrow. One arrow per setup.
 // Arrows only show on 2, 5, and 10 minute timeframes.
 // =============================================================================
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
 
-bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1  and high < high[1]
-bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and low  > low[1]
+bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1  and high <  high[1]
+bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and low  >  low[1]
+bool pc_long_done   = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
+bool pc_short_done  = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
 
-plotshape(show_pc and pc_long_valid,  "Long PC",  shape.arrowup,
-     location.belowbar, color=color.new(color.green, 0), size=size.huge)
-plotshape(show_pc and pc_short_valid, "Short PC", shape.arrowdown,
-     location.abovebar, color=color.new(color.red,   0), size=size.huge)
+var label pc_label = na
+
+// Session open: wipe slate clean
+if session_open
+    label.delete(pc_label)
+    pc_label := na
+
+// Breakout: forget reference without deleting — arrow freezes as historical marker
+if pc_long_done or pc_short_done
+    pc_label := na
+
+// PC bar: delete and recreate — arrow always on the most recent contained bar
+if show_pc and pc_long_valid
+    label.delete(pc_label)
+    pc_label := label.new(bar_index, low, "",
+         style=label.style_arrowup, yloc=yloc.belowbar,
+         color=color.new(color.green, 0), size=size.huge)
+
+else if show_pc and pc_short_valid
+    label.delete(pc_label)
+    pc_label := label.new(bar_index, high, "",
+         style=label.style_arrowdown, yloc=yloc.abovebar,
+         color=color.new(color.red, 0), size=size.huge)
 
 // =============================================================================
 // ALERTS
