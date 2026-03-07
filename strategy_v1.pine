@@ -1,11 +1,11 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v1.4
+// Day Trading Strategy Indicator - v1.6
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
 // =============================================================================
 //@version=6
-indicator("Day Trading Strategy v1", overlay=true, max_lines_count=500, max_labels_count=200)
+indicator("Day Trading Strategy v1", overlay=true, max_lines_count=500, max_labels_count=500)
 
 // =============================================================================
 // INPUTS — MOVING AVERAGES
@@ -50,15 +50,16 @@ col_pm   = input.color(color.white, "Line color",                   group=grp_pm
 // =============================================================================
 // INPUTS — PATIENCE CANDLE
 // =============================================================================
-grp_pc    = "Patience Candle"
-show_pc   = input.bool(true, "Show Patience Candle Arrows", group=grp_pc)
-retrace_pct = input.float(40.0, "Retracement % to suppress signals", minval=10, maxval=60, step=5, group=grp_pc)
+grp_pc      = "Patience Candle"
+show_pc     = input.bool(true,  "Show Patience Candle Arrows",              group=grp_pc)
+retrace_pct = input.float(40.0, "Daily range retracement % to suppress",
+              minval=10, maxval=60, step=5,                                  group=grp_pc)
 
 // =============================================================================
 // MOVING AVERAGES
 // =============================================================================
-sma8      = ta.sma(close, 8)
-sma21     = ta.sma(close, 21)
+sma8       = ta.sma(close, 8)
+sma21      = ta.sma(close, 21)
 sma200_5m  = request.security(syminfo.tickerid, "5",  ta.sma(close, 200))
 sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
 sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
@@ -83,7 +84,7 @@ is_regular   = not na(time("1", "0930-1600:23456"))
 session_open = not na(time("1", "0930-0931:23456"))
 
 // =============================================================================
-// PRE-MARKET HIGH / LOW — last 5 trading days, each scoped to its own day
+// PRE-MARKET HIGH / LOW — last 5 trading days, scoped per day
 // =============================================================================
 var float pm_high        = na
 var float pm_low         = na
@@ -106,18 +107,14 @@ if is_premarket
 float pmh = pm_locked ? pm_high_locked : pm_high
 float pml = pm_locked ? pm_low_locked  : pm_low
 
-// Arrays to hold per-day lines and labels (capped at 5 days = 10 lines, 10 labels)
 var line[]  pmh_lines  = array.new<line>()
 var line[]  pml_lines  = array.new<line>()
 var label[] pmh_labels = array.new<label>()
 var label[] pml_labels = array.new<label>()
-var line    pmh_cur    = na  // current day's line (extended each bar)
+var line    pmh_cur    = na
 var line    pml_cur    = na
 
-int max_days = 5
-
 if show_pm and session_open
-    // Create today's lines
     line new_pmh = line.new(bar_index, pmh, bar_index + 1, pmh, color=col_pm, width=1, style=line.style_solid)
     line new_pml = line.new(bar_index, pml, bar_index + 1, pml, color=col_pm, width=1, style=line.style_solid)
     array.push(pmh_lines, new_pmh)
@@ -125,7 +122,6 @@ if show_pm and session_open
     pmh_cur := new_pmh
     pml_cur := new_pml
 
-    // Create labels for today
     label lh = label.new(bar_index, pmh, "PMH " + str.tostring(pmh, "#.##"),
          color=color.new(color.white, 100), textcolor=col_pm, size=size.small, style=label.style_label_right)
     label ll = label.new(bar_index, pml, "PML " + str.tostring(pml, "#.##"),
@@ -133,14 +129,12 @@ if show_pm and session_open
     array.push(pmh_labels, lh)
     array.push(pml_labels, ll)
 
-    // Prune anything beyond 5 days
-    while array.size(pmh_lines) > max_days
+    while array.size(pmh_lines) > 5
         line.delete(array.shift(pmh_lines))
         line.delete(array.shift(pml_lines))
         label.delete(array.shift(pmh_labels))
         label.delete(array.shift(pml_labels))
 
-// Extend current day's lines rightward through the session; stops at close
 if show_pm and is_regular and not na(pmh_cur)
     line.set_x2(pmh_cur, bar_index)
     line.set_x2(pml_cur, bar_index)
@@ -160,121 +154,142 @@ if below_pm and trend_dir == 0
     trend_dir := -1
 
 // =============================================================================
-// SWING HIGH / LOW DETECTION
+// SESSION HIGH / LOW TRACKING
+// Tracks the running high and low since market open.
+// Used for retracement suppression and PC containment checks.
 // =============================================================================
-int swing_len = 3
-
-bool is_swing_high = high == ta.highest(high, swing_len * 2 + 1)
-bool is_swing_low  = low  == ta.lowest( low,  swing_len * 2 + 1)
-
-var float swing_high_price = na
-var float swing_low_price  = na
+var float day_high = na
+var float day_low  = na
 
 if session_open
-    swing_high_price := na
-    swing_low_price  := na
+    day_high := na
+    day_low  := na
+
+// Capture previous values before update (to detect new session highs/lows)
+float prev_day_high = day_high
+float prev_day_low  = day_low
 
 if is_regular
-    if trend_dir == 1  and is_swing_high
-        swing_high_price := high[swing_len]
-    if trend_dir == -1 and is_swing_low
-        swing_low_price  := low[swing_len]
+    day_high := na(day_high) ? high : math.max(day_high, high)
+    day_low  := na(day_low)  ? low  : math.min(day_low,  low)
+
+// New session high/low: current bar exceeded what was previously the day extreme
+bool new_sess_high = is_regular and trend_dir == 1  and high > nz(prev_day_high, high - 1)
+bool new_sess_low  = is_regular and trend_dir == -1 and low  < nz(prev_day_low,  low  + 1)
 
 // =============================================================================
-// 40% RETRACEMENT SUPPRESSION
-// Tracks running session high (for longs) and session low (for shorts).
-// If price retraces retrace_pct% of the move from the PM breakout level,
-// patience candle arrows are suppressed until a new session high/low is made.
+// 40% DAILY RANGE RETRACEMENT SUPPRESSION
+// Based on the full daily range (day_high - day_low), not the move from PMH.
+// Example: if day_high=$14, day_low=$8, range=$6, 40% threshold=$2.40
+// Suppress longs if price drops $2.40 from day_high (to $11.60 or below).
+// Reset suppression when a new session high (long) or low (short) is made.
 // =============================================================================
-float retrace_threshold = retrace_pct / 100.0
-
-var float day_high   = na   // running high since upside PM breakout
-var float day_low    = na   // running low since downside PM breakout
-var bool  long_suppressed  = false
-var bool  short_suppressed = false
+var bool long_suppressed  = false
+var bool short_suppressed = false
 
 if session_open
-    day_high          := na
-    day_low           := na
-    long_suppressed   := false
-    short_suppressed  := false
+    long_suppressed  := false
+    short_suppressed := false
 
-if is_regular and trend_dir == 1 and not na(pmh)
-    // New session high → reset suppression
-    if not na(day_high) and high > day_high
-        long_suppressed := false
-    day_high := na(day_high) ? high : math.max(day_high, high)
-    // Check retracement: how far has price pulled back from session high vs the full move
-    float move = day_high - pmh
-    if move > 0 and (day_high - low) / move >= retrace_threshold
+float daily_range     = not na(day_high) and not na(day_low) ? day_high - day_low : 0.0
+float retrace_thresh  = retrace_pct / 100.0
+
+if is_regular and trend_dir == 1 and daily_range > 0
+    if new_sess_high
+        long_suppressed := false  // new high resets suppression
+    else if low <= day_high - daily_range * retrace_thresh
         long_suppressed := true
 
-if is_regular and trend_dir == -1 and not na(pml)
-    // New session low → reset suppression
-    if not na(day_low) and low < day_low
-        short_suppressed := false
-    day_low := na(day_low) ? low : math.min(day_low, low)
-    // Check retracement: how far has price bounced from session low vs the full move
-    float move_s = pml - day_low
-    if move_s > 0 and (high - day_low) / move_s >= retrace_threshold
+if is_regular and trend_dir == -1 and daily_range > 0
+    if new_sess_low
+        short_suppressed := false  // new low resets suppression
+    else if high >= day_low + daily_range * retrace_thresh
         short_suppressed := true
 
 // =============================================================================
 // PATIENCE CANDLE DETECTION
-// Rules:
-//   - Regular session only
-//   - Long ONLY when above PMH (trend, not reversal)
-//   - Short ONLY when below PML (trend, not reversal)
-//   - Suppressed when price has retraced retrace_pct% from session high/low
-//   - Long:  pullback candle high <= swing high (contained upside)
-//   - Short: pullback candle low  >= swing low  (contained downside)
+//
+// A patience candle (PC) is a pullback candle that is "contained":
+//   Long:  high < day_high (didn't make new session high)
+//          AND high <= high[1] (didn't exceed the previous bar's high)
+//   Short: low > day_low (didn't make new session low)
+//          AND low >= low[1] (didn't undercut the previous bar's low)
+//
+// Only the MOST RECENT PC gets an arrow. When a new PC forms, the previous
+// arrow is deleted and replaced. When entry is triggered (next bar breaks
+// above PC high for long / below PC low for short), the arrow is cleared.
+//
+// Arrows only show on 2, 5, and 10 minute charts.
 // =============================================================================
-var float pc_high  = na
-var float pc_low   = na
-var bool  valid_pc = false
-var bool  pc_long  = false
-
-bool can_long  = is_regular and trend_dir == 1  and not na(pmh) and close > pmh and not long_suppressed
-bool can_short = is_regular and trend_dir == -1 and not na(pml) and close < pml and not short_suppressed
-
-bool in_pullback_long  = can_long  and not na(swing_high_price) and close < swing_high_price
-bool in_pullback_short = can_short and not na(swing_low_price)  and close > swing_low_price
-
-bool pc_long_valid  = in_pullback_long  and high <= swing_high_price
-bool pc_short_valid = in_pullback_short and low  >= swing_low_price
-
-if pc_long_valid
-    pc_high  := high
-    pc_low   := low
-    valid_pc := true
-    pc_long  := true
-else if pc_short_valid
-    pc_high  := high
-    pc_low   := low
-    valid_pc := true
-    pc_long  := false
-else if not in_pullback_long and not in_pullback_short
-    valid_pc := false
-    pc_high  := na
-    pc_low   := na
-
-// Arrows — only on 2, 5, and 10 min charts
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
 
-plotshape(show_pc and valid_tf and pc_long_valid,  "Long PC",  shape.arrowup,
-     location.belowbar, color=color.new(color.green, 0), size=size.small)
-plotshape(show_pc and valid_tf and pc_short_valid, "Short PC", shape.arrowdown,
-     location.abovebar, color=color.new(color.red, 0),   size=size.small)
+bool is_pc_long = is_regular
+     and valid_tf
+     and trend_dir == 1
+     and not na(pmh) and close > pmh
+     and not long_suppressed
+     and not na(day_high)
+     and high < day_high      // contained: didn't make new session high
+     and high <= high[1]      // contained: didn't exceed previous bar's high
+
+bool is_pc_short = is_regular
+     and valid_tf
+     and trend_dir == -1
+     and not na(pml) and close < pml
+     and not short_suppressed
+     and not na(day_low)
+     and low > day_low        // contained: didn't make new session low
+     and low >= low[1]        // contained: didn't undercut previous bar's low
+
+// Active PC state
+var label pc_label  = na
+var float pc_entry  = na  // price level that triggers entry (PC high for long, PC low for short)
+var bool  pc_is_long = true
+
+// --- Clear active PC when: ---
+// 1. Entry triggered: next bar broke above PC high (long) or below PC low (short)
+bool entry_triggered = not na(pc_entry) and
+     ((pc_is_long and high > pc_entry) or (not pc_is_long and low < pc_entry))
+
+// 2. New session high/low made (trend bar, not a pullback)
+// 3. Suppression kicked in
+// 4. Session ended
+bool clear_pc = entry_triggered or new_sess_high or new_sess_low
+     or (trend_dir == 1 and long_suppressed)
+     or (trend_dir == -1 and short_suppressed)
+     or session_open
+
+if clear_pc
+    label.delete(pc_label)
+    pc_label := na
+    pc_entry := na
+
+// --- Create / refresh PC arrow ---
+if show_pc and is_pc_long
+    label.delete(pc_label)
+    pc_label   := label.new(bar_index, low, "",
+         style=label.style_arrowup, yloc=yloc.belowbar,
+         color=color.new(color.green, 0), size=size.normal)
+    pc_entry   := high
+    pc_is_long := true
+
+else if show_pc and is_pc_short
+    label.delete(pc_label)
+    pc_label   := label.new(bar_index, high, "",
+         style=label.style_arrowdown, yloc=yloc.abovebar,
+         color=color.new(color.red, 0), size=size.normal)
+    pc_entry   := low
+    pc_is_long := false
 
 // =============================================================================
 // ALERTS
 // =============================================================================
-alertcondition(pc_long_valid  and not pc_long_valid[1],
-     "Patience Candle - LONG Setup",
+alertcondition(is_pc_long  and not is_pc_long[1],
+     "Patience Candle - LONG",
      "Long patience candle forming. Entry above PC high, stop below PC low.")
 
-alertcondition(pc_short_valid and not pc_short_valid[1],
-     "Patience Candle - SHORT Setup",
+alertcondition(is_pc_short and not is_pc_short[1],
+     "Patience Candle - SHORT",
      "Short patience candle forming. Entry below PC low, stop above PC high.")
 
 alertcondition(above_pm and not above_pm[1],
