@@ -108,35 +108,29 @@ if is_premarket
 float pmh = pm_locked ? pm_high_locked : pm_high
 float pml = pm_locked ? pm_low_locked  : pm_low
 
-// Draw solid horizontal lines at PMH / PML — scoped to current day only
-// Lines are created at session open and their right edge advances each bar,
-// stopping when the regular session ends so they never bleed into the next day.
-var line pmh_line = na
-var line pml_line = na
+// Draw solid horizontal lines at PMH / PML — one pair per day, scoped to that day.
+// Old lines are NOT deleted so they remain visible when scrolling back through history.
+// Only the current day's lines have their right edge advanced each bar.
+var line pmh_line_cur = na  // reference to today's PMH line (for x2 extension)
+var line pml_line_cur = na  // reference to today's PML line (for x2 extension)
 
 if show_pm and session_open
-    line.delete(pmh_line)
-    line.delete(pml_line)
-    pmh_line := line.new(bar_index, pmh, bar_index + 1, pmh,
+    pmh_line_cur := line.new(bar_index, pmh, bar_index + 1, pmh,
          color=col_pm, width=1, style=line.style_solid)
-    pml_line := line.new(bar_index, pml, bar_index + 1, pml,
+    pml_line_cur := line.new(bar_index, pml, bar_index + 1, pml,
          color=col_pm, width=1, style=line.style_solid)
 
-// Advance the right edge of each day's lines bar-by-bar during the session
-if show_pm and is_regular and not na(pmh_line)
-    line.set_x2(pmh_line, bar_index)
-    line.set_x2(pml_line, bar_index)
+// Advance right edge bar-by-bar within session; stops naturally at close
+if show_pm and is_regular and not na(pmh_line_cur)
+    line.set_x2(pmh_line_cur, bar_index)
+    line.set_x2(pml_line_cur, bar_index)
 
-// Labels (placed at session open, stay pinned there)
-var label pmh_label = na
-var label pml_label = na
+// Labels — one per day at session open, preserved historically
 if show_pm and session_open
-    label.delete(pmh_label)
-    label.delete(pml_label)
-    pmh_label := label.new(bar_index, pmh, "PMH " + str.tostring(pmh, "#.##"),
+    label.new(bar_index, pmh, "PMH " + str.tostring(pmh, "#.##"),
          color=color.new(color.white, 100), textcolor=col_pm,
          size=size.small, style=label.style_label_right)
-    pml_label := label.new(bar_index, pml, "PML " + str.tostring(pml, "#.##"),
+    label.new(bar_index, pml, "PML " + str.tostring(pml, "#.##"),
          color=color.new(color.white, 100), textcolor=col_pm,
          size=size.small, style=label.style_label_right)
 
@@ -177,16 +171,25 @@ if is_regular
 
 // =============================================================================
 // PATIENCE CANDLE DETECTION
-// Long:  pullback candle high <= recent swing high (contained upside)
-// Short: pullback candle low  >= recent swing low  (contained downside)
+// Rules:
+//   - Regular session only (no pre-market / after-hours)
+//   - Long setups ONLY when price is above PMH (true uptrend, not reversal)
+//   - Short setups ONLY when price is below PML (true downtrend, not reversal)
+//   - No signals inside the pre-market range
+//   - Long:  pullback candle high <= recent swing high (contained upside)
+//   - Short: pullback candle low  >= recent swing low  (contained downside)
 // =============================================================================
 var float pc_high  = na
 var float pc_low   = na
 var bool  valid_pc = false
 var bool  pc_long  = false
 
-bool in_pullback_long  = trend_dir == 1  and not na(swing_high_price) and close < swing_high_price
-bool in_pullback_short = trend_dir == -1 and not na(swing_low_price)  and close > swing_low_price
+// Gate: must be regular session, broken out of PM range, and trending with the move
+bool can_long  = is_regular and trend_dir == 1  and not na(pmh) and close > pmh
+bool can_short = is_regular and trend_dir == -1 and not na(pml) and close < pml
+
+bool in_pullback_long  = can_long  and not na(swing_high_price) and close < swing_high_price
+bool in_pullback_short = can_short and not na(swing_low_price)  and close > swing_low_price
 
 bool pc_long_valid  = in_pullback_long  and high <= swing_high_price
 bool pc_short_valid = in_pullback_short and low  >= swing_low_price
@@ -206,12 +209,12 @@ else if not in_pullback_long and not in_pullback_short
     pc_high  := na
     pc_low   := na
 
-// Patience candle dots — only shown on 2, 5, and 10 minute charts
+// Patience candle arrows — only on 2, 5, and 10 min charts
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
 
-plotshape(show_pc and valid_tf and pc_long_valid,  "Long PC Dot",  shape.circle,
+plotshape(show_pc and valid_tf and pc_long_valid,  "Long PC",  shape.arrowup,
      location.belowbar, color=color.new(color.green, 0), size=size.tiny)
-plotshape(show_pc and valid_tf and pc_short_valid, "Short PC Dot", shape.circle,
+plotshape(show_pc and valid_tf and pc_short_valid, "Short PC", shape.arrowdown,
      location.abovebar, color=color.new(color.red, 0),   size=size.tiny)
 
 // =============================================================================
