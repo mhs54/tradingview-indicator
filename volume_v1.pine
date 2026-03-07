@@ -10,7 +10,7 @@ indicator("Volume", overlay=false)
 
 ma_len = input.int(10, "MA Length", minval=1)
 
-vol_color = close >= open ? color.new(color.green, 20) : color.new(color.red, 20)
+vol_color = close >= open ? color.new(color.green, 40) : color.new(color.red, 40)
 
-plot(volume * 1.1, "Volume", color=vol_color, style=plot.style_columns)
+plot(volume * 0.5, "Volume", color=vol_color, style=plot.style_columns)
 plot(ta.sma(volume, ma_len), "Vol MA", color=color.yellow, linewidth=2)
