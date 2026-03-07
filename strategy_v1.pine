@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v2.1
+// Day Trading Strategy Indicator - v2.2
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -168,47 +168,38 @@ if below_ref and trend_dir == 0
     trend_dir := -1
 
 // =============================================================================
+// SESSION HIGH / LOW
+// =============================================================================
+var float day_high = na
+var float day_low  = na
+
+if session_open
+    day_high := na
+    day_low  := na
+
+if is_regular
+    day_high := na(day_high) ? high : math.max(day_high, high)
+    day_low  := na(day_low)  ? low  : math.min(day_low,  low)
+
+// =============================================================================
 // PATIENCE CANDLE DETECTION
 //
-// Uses swing high/low (swing_len=3) to identify the most recent swing extreme.
-// PC Long:  in uptrend, price pulled back below swing high, bar contained (high <= swing high)
-// PC Short: in downtrend, price pulled back above swing low, bar contained (low >= swing low)
+// Long:  in uptrend, bar did NOT make a new session high (contained pullback)
+// Short: in downtrend, bar did NOT make a new session low (contained pullback)
 //
-// Only the most recent PC shows an arrow — replaced each time a new PC forms.
+// day_high/day_low[1] = session extreme as of the previous bar, so the current
+// bar is compared against what came before it (no self-reference).
 // Arrows only show on 2, 5, and 10 minute timeframes.
 // =============================================================================
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
 
-int   swing_len        = 3
-bool  is_swing_high    = high == ta.highest(high, swing_len * 2 + 1)
-bool  is_swing_low     = low  == ta.lowest(low,   swing_len * 2 + 1)
-
-var float swing_high_price = na
-var float swing_low_price  = na
-
-if session_open
-    swing_high_price := na
-    swing_low_price  := na
-
-if is_regular
-    if trend_dir == 1 and is_swing_high
-        swing_high_price := high[swing_len]
-    if trend_dir == -1 and is_swing_low
-        swing_low_price  := low[swing_len]
-
-bool can_long  = is_regular and valid_tf and trend_dir == 1  and not na(ref_high) and close > ref_high
-bool can_short = is_regular and valid_tf and trend_dir == -1 and not na(ref_low)  and close < ref_low
-
-bool in_pullback_long  = can_long  and not na(swing_high_price) and close < swing_high_price
-bool in_pullback_short = can_short and not na(swing_low_price)  and close > swing_low_price
-
-bool pc_long_valid  = in_pullback_long  and high <= swing_high_price
-bool pc_short_valid = in_pullback_short and low  >= swing_low_price
+bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1  and not na(day_high[1]) and high < day_high[1]
+bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and not na(day_low[1])  and low  > day_low[1]
 
 plotshape(show_pc and pc_long_valid,  "Long PC",  shape.arrowup,
-     location.belowbar, color=color.new(color.green, 0), size=size.large)
+     location.belowbar, color=color.new(color.green, 0), size=size.auto)
 plotshape(show_pc and pc_short_valid, "Short PC", shape.arrowdown,
-     location.abovebar, color=color.new(color.red,   0), size=size.large)
+     location.abovebar, color=color.new(color.red,   0), size=size.auto)
 
 // =============================================================================
 // ALERTS
