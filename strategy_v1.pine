@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v2.0
+// Day Trading Strategy Indicator - v2.1
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -205,23 +205,10 @@ bool in_pullback_short = can_short and not na(swing_low_price)  and close > swin
 bool pc_long_valid  = in_pullback_long  and high <= swing_high_price
 bool pc_short_valid = in_pullback_short and low  >= swing_low_price
 
-var label pc_label = na
-
-if session_open
-    label.delete(pc_label)
-    pc_label := na
-
-if show_pc and pc_long_valid
-    label.delete(pc_label)
-    pc_label := label.new(bar_index, low, "",
-         style=label.style_arrowup, yloc=yloc.belowbar,
-         color=color.new(color.green, 0), size=size.large)
-
-else if show_pc and pc_short_valid
-    label.delete(pc_label)
-    pc_label := label.new(bar_index, high, "",
-         style=label.style_arrowdown, yloc=yloc.abovebar,
-         color=color.new(color.red, 0), size=size.large)
+plotshape(show_pc and pc_long_valid,  "Long PC",  shape.arrowup,
+     location.belowbar, color=color.new(color.green, 0), size=size.large)
+plotshape(show_pc and pc_short_valid, "Short PC", shape.arrowdown,
+     location.abovebar, color=color.new(color.red,   0), size=size.large)
 
 // =============================================================================
 // ALERTS
