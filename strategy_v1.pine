@@ -230,7 +230,6 @@ bool is_pc_long = is_regular
      and not long_suppressed
      and not na(day_high)
      and high < day_high      // contained: didn't make new session high
-     and high <= high[1]      // contained: didn't exceed previous bar's high
 
 bool is_pc_short = is_regular
      and valid_tf
@@ -239,7 +238,6 @@ bool is_pc_short = is_regular
      and not short_suppressed
      and not na(day_low)
      and low > day_low        // contained: didn't make new session low
-     and low >= low[1]        // contained: didn't undercut previous bar's low
 
 // Active PC state
 var label pc_label  = na
@@ -254,7 +252,7 @@ bool entry_triggered = not na(pc_entry) and
 // 2. New session high/low made (trend bar, not a pullback)
 // 3. Suppression kicked in
 // 4. Session ended
-bool clear_pc = entry_triggered or new_sess_high or new_sess_low
+bool clear_pc = new_sess_high or new_sess_low
      or (trend_dir == 1 and long_suppressed)
      or (trend_dir == -1 and short_suppressed)
      or session_open
