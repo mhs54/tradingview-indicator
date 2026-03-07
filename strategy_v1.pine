@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v2.7
+// Day Trading Strategy Indicator - v2.8
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -185,8 +185,10 @@ bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and low  >  lo
 bool pc_long_done   = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
 bool pc_short_done  = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
 
-// Filled triangle arrow — width = 2 bars, height = 1x ATR
-float atr_val = ta.atr(14)
+// Filled triangle arrow — width = 2 bars, height = 0.95x ATR, gap from candle = 0.15x ATR
+float atr_val  = ta.atr(14)
+float tri_h    = atr_val * 0.95   // 5% smaller than full ATR
+float tri_gap  = atr_val * 0.15   // separation so triangle doesn't touch the candle
 
 var polyline pc_poly = na
 
@@ -204,9 +206,9 @@ if show_pc and pc_long_valid
     polyline.delete(pc_poly)
     pc_poly := polyline.new(
          array.from(
-             chart.point.from_index(bar_index,     low),
-             chart.point.from_index(bar_index - 1, low - atr_val),
-             chart.point.from_index(bar_index + 1, low - atr_val)),
+             chart.point.from_index(bar_index,     low - tri_gap),
+             chart.point.from_index(bar_index - 1, low - tri_gap - tri_h),
+             chart.point.from_index(bar_index + 1, low - tri_gap - tri_h)),
          closed=true,
          fill_color=color.new(color.green, 0),
          line_color=color.new(color.green, 0))
@@ -215,9 +217,9 @@ else if show_pc and pc_short_valid
     polyline.delete(pc_poly)
     pc_poly := polyline.new(
          array.from(
-             chart.point.from_index(bar_index,     high),
-             chart.point.from_index(bar_index - 1, high + atr_val),
-             chart.point.from_index(bar_index + 1, high + atr_val)),
+             chart.point.from_index(bar_index,     high + tri_gap),
+             chart.point.from_index(bar_index - 1, high + tri_gap + tri_h),
+             chart.point.from_index(bar_index + 1, high + tri_gap + tri_h)),
          closed=true,
          fill_color=color.new(color.red, 0),
          line_color=color.new(color.red, 0))
