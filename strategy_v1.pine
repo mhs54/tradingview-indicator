@@ -48,16 +48,6 @@ show_pm  = input.bool(true,         "Show PMH / PML (last 5 days)", group=grp_pm
 col_pm   = input.color(color.white, "Line color",                   group=grp_pm)
 
 // =============================================================================
-// INPUTS — VOLUME
-// =============================================================================
-grp_vol      = "Volume"
-show_vol     = input.bool(true,           "Show Volume",        group=grp_vol)
-vol_ma_len   = input.int(10,              "Volume MA Length",   group=grp_vol, minval=1)
-col_vol_up   = input.color(color.new(color.green, 20), "Up bar color",   group=grp_vol)
-col_vol_down = input.color(color.new(color.red,   20), "Down bar color", group=grp_vol)
-col_vol_ma   = input.color(color.yellow,           "MA color",          group=grp_vol)
-
-// =============================================================================
 // INPUTS — PATIENCE CANDLE
 // =============================================================================
 grp_pc    = "Patience Candle"
@@ -275,18 +265,6 @@ plotshape(show_pc and valid_tf and pc_long_valid,  "Long PC",  shape.arrowup,
      location.belowbar, color=color.new(color.green, 0), size=size.small)
 plotshape(show_pc and valid_tf and pc_short_valid, "Short PC", shape.arrowdown,
      location.abovebar, color=color.new(color.red, 0),   size=size.small)
-
-// =============================================================================
-// VOLUME — overlaid on price chart
-// Bars scaled 10% larger than actual volume.
-// TradingView will auto-assign a secondary scale for volume vs price.
-// Right-click the volume bars on chart → "Scale" if you need to adjust.
-// =============================================================================
-vol_display = volume * 1.1
-vol_bar_color = close >= open ? col_vol_up : col_vol_down
-
-plot(show_vol ? vol_display : na, "Volume",  color=vol_bar_color, style=plot.style_columns)
-plot(show_vol ? ta.sma(volume, vol_ma_len) : na, "Vol MA", color=col_vol_ma, linewidth=2)
 
 // =============================================================================
 // ALERTS
