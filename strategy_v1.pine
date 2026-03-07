@@ -78,10 +78,11 @@ plot(show_vwap ? vwap_val : na, "VWAP", color=col_vwap, linewidth=width_vwap)
 
 // =============================================================================
 // SESSION DETECTION
+// Using built-in session variables — reliable on all timeframes
 // =============================================================================
-is_premarket = not na(time("1", "0400-0930:23456"))
-is_regular   = not na(time("1", "0930-1600:23456"))
-session_open = not na(time("1", "0930-0931:23456"))
+bool is_premarket = session.ispremarket
+bool is_regular   = session.ismarket
+bool session_open = is_regular and not is_regular[1]  // first bar of regular session
 
 // =============================================================================
 // PRE-MARKET HIGH / LOW — last 5 trading days, scoped per day
@@ -92,7 +93,7 @@ var float pm_high_locked = na
 var float pm_low_locked  = na
 var bool  pm_locked      = false
 
-if session_open and not session_open[1]
+if session_open
     pm_high_locked := pm_high
     pm_low_locked  := pm_low
     pm_high        := na
