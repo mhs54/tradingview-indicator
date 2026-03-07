@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v2.5
+// Day Trading Strategy Indicator - v2.6
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -180,8 +180,8 @@ if below_ref and trend_dir == 0
 // =============================================================================
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
 
-bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1  and high <  high[1]
-bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and low  >  low[1]
+bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1  and high <  high[1] and close > ref_high
+bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and low  >  low[1]  and close < ref_low
 bool pc_long_done   = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
 bool pc_short_done  = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
 
