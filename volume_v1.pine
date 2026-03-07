@@ -6,7 +6,7 @@
 // Includes a solid yellow 10-period MA.
 // =============================================================================
 //@version=6
-indicator("Volume", overlay=false)
+indicator("Volume", overlay=false, scale=scale.none)
 
 ma_len = input.int(10, "MA Length", minval=1)
 
