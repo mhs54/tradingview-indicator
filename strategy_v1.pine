@@ -1,7 +1,9 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v1.1
+// Day Trading Strategy Indicator - v1.2
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
+// NOTE: Support/resistance levels are drawn manually by the trader on the
+//       hourly chart before market open (solid yellow horizontal lines).
 // =============================================================================
 //@version=6
 indicator("Day Trading Strategy v1", overlay=true, max_lines_count=500, max_labels_count=500)
@@ -106,7 +108,9 @@ if is_premarket
 float pmh = pm_locked ? pm_high_locked : pm_high
 float pml = pm_locked ? pm_low_locked  : pm_low
 
-// Draw solid horizontal lines at PMH / PML (created once at session open, extended rightward)
+// Draw solid horizontal lines at PMH / PML — scoped to current day only
+// Lines are created at session open and their right edge advances each bar,
+// stopping when the regular session ends so they never bleed into the next day.
 var line pmh_line = na
 var line pml_line = na
 
@@ -114,11 +118,16 @@ if show_pm and session_open
     line.delete(pmh_line)
     line.delete(pml_line)
     pmh_line := line.new(bar_index, pmh, bar_index + 1, pmh,
-         color=col_pm, width=1, style=line.style_solid, extend=extend.right)
+         color=col_pm, width=1, style=line.style_solid)
     pml_line := line.new(bar_index, pml, bar_index + 1, pml,
-         color=col_pm, width=1, style=line.style_solid, extend=extend.right)
+         color=col_pm, width=1, style=line.style_solid)
 
-// Labels
+// Advance the right edge of each day's lines bar-by-bar during the session
+if show_pm and is_regular and not na(pmh_line)
+    line.set_x2(pmh_line, bar_index)
+    line.set_x2(pml_line, bar_index)
+
+// Labels (placed at session open, stay pinned there)
 var label pmh_label = na
 var label pml_label = na
 if show_pm and session_open
@@ -197,8 +206,13 @@ else if not in_pullback_long and not in_pullback_short
     pc_high  := na
     pc_low   := na
 
-bgcolor(show_pc and pc_long_valid  ? color.new(color.green, 85) : na, title="PC Long BG")
-bgcolor(show_pc and pc_short_valid ? color.new(color.red,   85) : na, title="PC Short BG")
+// Patience candle dots — only shown on 2, 5, and 10 minute charts
+bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
+
+plotshape(show_pc and valid_tf and pc_long_valid,  "Long PC Dot",  shape.circle,
+     location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+plotshape(show_pc and valid_tf and pc_short_valid, "Short PC Dot", shape.circle,
+     location.abovebar, color=color.new(color.red, 0),   size=size.tiny)
 
 // =============================================================================
 // ENTRY / STOP LINES + R:R LABEL
