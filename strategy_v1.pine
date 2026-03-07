@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v2.2
+// Day Trading Strategy Indicator - v2.3
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -181,14 +181,19 @@ if is_regular
     day_high := na(day_high) ? high : math.max(day_high, high)
     day_low  := na(day_low)  ? low  : math.min(day_low,  low)
 
+// Breakout = current bar exceeded the previous session extreme
+bool new_sess_high = is_regular and trend_dir == 1  and not na(day_high[1]) and high > day_high[1]
+bool new_sess_low  = is_regular and trend_dir == -1 and not na(day_low[1])  and low  < day_low[1]
+
 // =============================================================================
 // PATIENCE CANDLE DETECTION
 //
-// Long:  in uptrend, bar did NOT make a new session high (contained pullback)
-// Short: in downtrend, bar did NOT make a new session low (contained pullback)
+// Long:  in uptrend, bar's high stayed below the previous session high (contained)
+// Short: in downtrend, bar's low stayed above the previous session low (contained)
 //
-// day_high/day_low[1] = session extreme as of the previous bar, so the current
-// bar is compared against what came before it (no self-reference).
+// Arrow tracks the most recent PC in the current pullback sequence.
+// On breakout: arrow locks in place as a historical marker for that setup.
+// On next pullback: fresh arrow starts again.
 // Arrows only show on 2, 5, and 10 minute timeframes.
 // =============================================================================
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
@@ -196,10 +201,29 @@ bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.
 bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1  and not na(day_high[1]) and high < day_high[1]
 bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and not na(day_low[1])  and low  > day_low[1]
 
-plotshape(show_pc and pc_long_valid,  "Long PC",  shape.arrowup,
-     location.belowbar, color=color.new(color.green, 0), size=size.auto)
-plotshape(show_pc and pc_short_valid, "Short PC", shape.arrowdown,
-     location.abovebar, color=color.new(color.red,   0), size=size.auto)
+var label pc_label = na
+
+// Breakout: forget reference without deleting — label stays as historical marker
+if new_sess_high or new_sess_low
+    pc_label := na
+
+// New session: delete in-progress label and reset
+if session_open
+    label.delete(pc_label)
+    pc_label := na
+
+// PC bar: delete and recreate so arrow always sits on the most recent PC
+if show_pc and pc_long_valid
+    label.delete(pc_label)
+    pc_label := label.new(bar_index, low, "",
+         style=label.style_arrowup, yloc=yloc.belowbar,
+         color=color.new(color.green, 0), size=size.huge)
+
+else if show_pc and pc_short_valid
+    label.delete(pc_label)
+    pc_label := label.new(bar_index, high, "",
+         style=label.style_arrowdown, yloc=yloc.abovebar,
+         color=color.new(color.red, 0), size=size.huge)
 
 // =============================================================================
 // ALERTS
