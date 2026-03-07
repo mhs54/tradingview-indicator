@@ -1,20 +1,22 @@
 // =============================================================================
 // Volume Indicator
 // Add to chart then "Move to existing pane" to merge into price chart pane.
+// Normalized to recent max volume so bars stay consistent across all timeframes.
 // =============================================================================
 //@version=6
 indicator("Volume", overlay=false)
 
-ma_len = input.int(10, "MA Length", minval=1)
+ma_len      = input.int(10,  "MA Length",            minval=1)
+vol_lookback = input.int(100, "Normalization Lookback", minval=10)
 
-float scale_factor = 0.3
+// Normalize all bars to 0-100 scale based on recent highest volume
+// This keeps bar heights consistent regardless of timeframe
+vol_max  = ta.highest(volume, vol_lookback)
+float norm = vol_max > 0 ? 100.0 / vol_max : 0.0
 
 vol_color = close >= open ? color.new(color.green, 60) : color.new(color.red, 60)
 
-// Anchor scale minimum at 0 — prevents negative volume axis
 hline(0, color=color.new(color.white, 0), linestyle=hline.style_solid, linewidth=1)
 
-plot(volume * scale_factor, "Volume", color=vol_color, style=plot.style_columns)
-
-// MA scaled by same factor so it overlays correctly on the bars
-plot(ta.sma(volume, ma_len) * scale_factor, "Vol MA", color=color.yellow, linewidth=2)
+plot(volume * norm,                    "Volume", color=vol_color,    style=plot.style_columns)
+plot(ta.sma(volume, ma_len) * norm,    "Vol MA", color=color.yellow, linewidth=2)
