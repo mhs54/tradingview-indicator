@@ -1,24 +1,11 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v3.0
-// Strategy: Levels + Trend + Patience Candle + Dynamic S/R
+// Day Trading Strategy Indicator - v2.9
+// Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
 // =============================================================================
 //@version=6
-indicator("Day Trading Strategy v1", overlay=true, max_lines_count=500, max_labels_count=500, max_polylines_count=100, max_boxes_count=500)
-
-// =============================================================================
-// S/R TYPE DEFINITION (must be declared before inputs/methods)
-// =============================================================================
-type SRLevel
-    float price
-    int count
-    int role
-    bool active
-    line ln = na
-    box bx = na
-    label lbl = na
-    int start_time
+indicator("Day Trading Strategy v1", overlay=true, max_lines_count=500, max_labels_count=500, max_polylines_count=100)
 
 // =============================================================================
 // INPUTS — MOVING AVERAGES
@@ -65,110 +52,6 @@ col_pm   = input.color(color.white, "Line color",                   group=grp_pm
 // =============================================================================
 grp_pc   = "Patience Candle"
 show_pc  = input.bool(true, "Show Patience Candle Arrows", group=grp_pc)
-
-// =============================================================================
-// INPUTS — DYNAMIC SUPPORT & RESISTANCE
-// =============================================================================
-grp_sr       = "Dynamic Support & Resistance"
-show_sr      = input.bool(true,  "Show Dynamic S/R",          group=grp_sr)
-int pivotLen    = input.int(10,  "Pivot Length",   minval=3,  group=grp_sr)
-int minStrength = input.int(3,   "Minimum Touches", minval=2, group=grp_sr)
-float zonePct   = input.float(0.618, "Zone Tolerance (%)", minval=0.01, step=0.1, group=grp_sr) / 100.0
-float breakPct  = input.float(1.0,   "Invalidation Break (%)", minval=0.01, step=0.1, group=grp_sr) / 100.0
-color colSup    = input.color(color.new(color.green, 80), "Support Channel",   group=grp_sr)
-color colRes    = input.color(color.new(color.red,   80), "Resistance Channel",group=grp_sr)
-color colTxt    = input.color(color.white,                "Label Color",       group=grp_sr)
-
-// =============================================================================
-// S/R METHODS
-// =============================================================================
-method updateVisuals(SRLevel this) =>
-    if this.active and this.count >= minStrength and show_sr
-        color c = this.role == 1 ? colSup : colRes
-        float tolerance = this.price * zonePct
-        float top = this.price + tolerance
-        float bot = this.price - tolerance
-
-        if na(this.bx)
-            this.bx := box.new(
-                 left=this.start_time, top=top, right=time, bottom=bot,
-                 border_color=color.new(c, 0), border_style=line.style_dotted,
-                 bgcolor=color.new(c, 80), extend=extend.right, xloc=xloc.bar_time)
-        else
-            this.bx.set_top(top)
-            this.bx.set_bottom(bot)
-
-        if na(this.ln)
-            this.ln := line.new(
-                 x1=this.start_time, y1=this.price, x2=time, y2=this.price,
-                 color=c, width=1, extend=extend.right, xloc=xloc.bar_time)
-        else
-            this.ln.set_y1(this.price)
-            this.ln.set_y2(this.price)
-
-        string txt = str.format("{0} - {1,number,#.##}", this.role == 1 ? "Support" : "Resistance", this.price)
-        if na(this.lbl)
-            this.lbl := label.new(
-                 x=time, y=this.price, text=txt,
-                 style=label.style_label_left,
-                 color=color.new(color.black, 100), textcolor=colTxt,
-                 size=size.small, xloc=xloc.bar_time)
-        else
-            this.lbl.set_xy(time, this.price)
-            this.lbl.set_text(txt)
-        true
-
-    else if not this.active
-        if not na(this.bx)
-            this.bx.delete()
-            this.bx := na
-        if not na(this.ln)
-            this.ln.delete()
-            this.ln := na
-        if not na(this.lbl)
-            this.lbl.delete()
-            this.lbl := na
-        true
-    else
-        false
-
-method processPoint(array<SRLevel> levels, float price, int role, int p_time) =>
-    bool found = false
-    for [i, lvl] in levels
-        if lvl.active
-            float tolerance = lvl.price * zonePct
-            if math.abs(price - lvl.price) <= tolerance
-                lvl.price := (lvl.price * lvl.count + price) / (lvl.count + 1)
-                lvl.count += 1
-                lvl.updateVisuals()
-                found := true
-                break
-    if not found
-        SRLevel newLvl = SRLevel.new(price, 1, role, true, na, na, na, p_time)
-        levels.push(newLvl)
-
-method checkInvalidation(array<SRLevel> levels, float currentPrice) =>
-    for [i, lvl] in levels
-        if lvl.active
-            float threshold = lvl.price * breakPct
-            bool broken = false
-            if lvl.role == 1
-                if currentPrice < lvl.price - threshold
-                    broken := true
-            else
-                if currentPrice > lvl.price + threshold
-                    broken := true
-            if broken
-                lvl.active := false
-                lvl.updateVisuals()
-
-method cleanup(array<SRLevel> levels) =>
-    int n = levels.size()
-    if n > 0
-        for i = n - 1 to 0
-            SRLevel lvl = levels.get(i)
-            if not lvl.active
-                levels.remove(i)
 
 // =============================================================================
 // MOVING AVERAGES
@@ -342,37 +225,6 @@ else if show_pc and pc_short_valid
          closed=true,
          fill_color=color.new(color.red, 0),
          line_color=color.new(color.red, 0))
-
-// =============================================================================
-// DYNAMIC SUPPORT & RESISTANCE
-// =============================================================================
-var array<SRLevel> supports    = array.new<SRLevel>()
-var array<SRLevel> resistances = array.new<SRLevel>()
-
-float ph = ta.pivothigh(high, pivotLen, pivotLen)
-float pl = ta.pivotlow(low,  pivotLen, pivotLen)
-int   pTime = time[pivotLen]
-
-if not na(ph)
-    resistances.processPoint(ph, -1, pTime)
-
-if not na(pl)
-    supports.processPoint(pl, 1, pTime)
-
-supports.checkInvalidation(close)
-resistances.checkInvalidation(close)
-
-if barstate.islast
-    int offsetTime = time + ((time - nz(time[1], time)) * 5)
-    for lvl in supports
-        if lvl.active and not na(lvl.lbl)
-            lvl.lbl.set_x(offsetTime)
-    for lvl in resistances
-        if lvl.active and not na(lvl.lbl)
-            lvl.lbl.set_x(offsetTime)
-
-supports.cleanup()
-resistances.cleanup()
 
 // =============================================================================
 // ALERTS
