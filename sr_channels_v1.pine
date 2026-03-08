@@ -1,14 +1,13 @@
 // Based on "Support Resistance Channels" by LonesomeTheBlue
-// Modified: zones replaced with yellow boundary lines, pivots from hourly timeframe
+// Modified: yellow boundary lines, hourly pivots, time-based loopback, dynamic levels
 //@version=6
 indicator('SR Channels (Hourly)', 'SRchannel', overlay = true, max_bars_back = 501, max_lines_count = 500)
 
-prd         = input.int(10,  'Pivot Period',            minval = 4,   maxval = 30,  group = 'Settings')
-ppsrc       = input.string('High/Low', 'Source',        options = ['High/Low', 'Close/Open'], group = 'Settings')
-ChannelW    = input.int(5,   'Maximum Channel Width %', minval = 1,   maxval = 8,   group = 'Settings')
-minstrength = input.int(1,   'Minimum Strength',        minval = 1,                 group = 'Settings')
-maxnumsr    = input.int(6,   'Maximum Number of S/R',   minval = 1,   maxval = 10,  group = 'Settings') - 1
-loopback_days = input.int(60, 'Loopback Period (Days)', minval = 5,   maxval = 365, group = 'Settings')
+prd           = input.int(10,  'Pivot Period',            minval = 4,   maxval = 30,  group = 'Settings')
+ppsrc         = input.string('High/Low', 'Source',        options = ['High/Low', 'Close/Open'], group = 'Settings')
+ChannelW      = input.int(5,   'Maximum Channel Width %', minval = 1,   maxval = 8,   group = 'Settings')
+minstrength   = input.int(1,   'Minimum Strength',        minval = 1,                 group = 'Settings')
+loopback_days = input.int(60,  'Loopback Period (Days)',  minval = 5,   maxval = 365, group = 'Settings')
 
 // Pivot source — calculated on the hourly chart
 float src1 = ppsrc == 'High/Low' ? high : math.max(close, open)
@@ -18,22 +17,52 @@ float ph = request.security(syminfo.tickerid, '60', ta.pivothigh(src1, prd, prd)
 float pl = request.security(syminfo.tickerid, '60', ta.pivotlow(src2,  prd, prd))
 
 // Channel width based on hourly range
-prdhighest = request.security(syminfo.tickerid, '60', ta.highest(300))
-prdlowest  = request.security(syminfo.tickerid, '60', ta.lowest(300))
-cwidth = (prdhighest - prdlowest) * ChannelW / 100
+float prdhighest = request.security(syminfo.tickerid, '60', ta.highest(300))
+float prdlowest  = request.security(syminfo.tickerid, '60', ta.lowest(300))
+float cwidth     = (prdhighest - prdlowest) * ChannelW / 100
 
-// Collect pivot values
+// Pre-market high/low for current trading day
+int  et_hour      = hour(time, 'America/New_York')
+int  et_minute    = minute(time, 'America/New_York')
+bool is_regular   = session.ismarket
+bool session_open = is_regular and not is_regular[1]
+bool in_premarket = not is_regular and et_hour >= 4 and (et_hour < 9 or (et_hour == 9 and et_minute < 30))
+
+var float pm_build_h = na
+var float pm_build_l = na
+var float pmh_day    = na
+var float pml_day    = na
+
+if session_open
+    pmh_day    := pm_build_h
+    pml_day    := pm_build_l
+    pm_build_h := na
+    pm_build_l := na
+
+if in_premarket
+    pm_build_h := na(pm_build_h) ? high : math.max(pm_build_h, high)
+    pm_build_l := na(pm_build_l) ? low  : math.min(pm_build_l, low)
+
+// Collect pivot values (cap at 100 for performance)
 var pivotvals = array.new_float(0)
 var pivotlocs = array.new_float(0)
+
 if bool(ph) or bool(pl)
     array.unshift(pivotvals, bool(ph) ? ph : pl)
     array.unshift(pivotlocs, time)
-    for x = array.size(pivotvals) - 1 to 0 by 1
-        if time - array.get(pivotlocs, x) > loopback_days * 86400000
+    // Prune pivots older than loopback_days
+    int sz = array.size(pivotvals)
+    while sz > 0
+        if time - array.get(pivotlocs, sz - 1) > loopback_days * 86400000
             array.pop(pivotvals)
             array.pop(pivotlocs)
-            continue
-        break
+            sz -= 1
+        else
+            break
+    // Cap size for performance
+    while array.size(pivotvals) > 100
+        array.pop(pivotvals)
+        array.pop(pivotlocs)
 
 // Build SR channel for a given pivot
 get_sr_vals(ind) =>
@@ -64,38 +93,40 @@ changeit(x, y) =>
 if bool(ph) or bool(pl)
     supres = array.new_float(0)
     stren  = array.new_float(10, 0)
+    int npv = array.size(pivotvals)
 
-    for x = 0 to array.size(pivotvals) - 1 by 1
+    for x = 0 to npv - 1 by 1
         [hi, lo, strength] = get_sr_vals(x)
         array.push(supres, strength)
         array.push(supres, hi)
         array.push(supres, lo)
 
-    for x = 0 to array.size(pivotvals) - 1 by 1
-        h = array.get(supres, x * 3 + 1)
-        l = array.get(supres, x * 3 + 2)
-        s = 0
-        for y = 0 to math.min(500, bar_index) by 1
+    // Count how many recent bars touch each level (capped at 100 for performance)
+    for x = 0 to npv - 1 by 1
+        float h = array.get(supres, x * 3 + 1)
+        float l = array.get(supres, x * 3 + 2)
+        int s = 0
+        for y = 0 to math.min(100, bar_index) by 1
             if high[y] <= h and high[y] >= l or low[y] <= h and low[y] >= l
                 s := s + 1
         array.set(supres, x * 3, array.get(supres, x * 3) + s)
 
     array.fill(suportresistance, 0)
-    src = 0
-    for x = 0 to array.size(pivotvals) - 1 by 1
-        stv = -1.
-        stl = -1
-        for y = 0 to array.size(pivotvals) - 1 by 1
+    int src = 0
+    for x = 0 to npv - 1 by 1
+        float stv = -1.
+        int stl = -1
+        for y = 0 to npv - 1 by 1
             if array.get(supres, y * 3) > stv and array.get(supres, y * 3) >= minstrength * 20
                 stv := array.get(supres, y * 3)
                 stl := y
         if stl >= 0
-            hh = array.get(supres, stl * 3 + 1)
-            ll = array.get(supres, stl * 3 + 2)
+            float hh = array.get(supres, stl * 3 + 1)
+            float ll = array.get(supres, stl * 3 + 2)
             array.set(suportresistance, src * 2,     hh)
             array.set(suportresistance, src * 2 + 1, ll)
             array.set(stren, src, array.get(supres, stl * 3))
-            for y = 0 to array.size(pivotvals) - 1 by 1
+            for y = 0 to npv - 1 by 1
                 if array.get(supres, y * 3 + 1) <= hh and array.get(supres, y * 3 + 1) >= ll or array.get(supres, y * 3 + 2) <= hh and array.get(supres, y * 3 + 2) >= ll
                     array.set(supres, y * 3, -1)
             src := src + 1
@@ -105,8 +136,9 @@ if bool(ph) or bool(pl)
     for x = 0 to 8 by 1
         for y = x + 1 to 9 by 1
             if array.get(stren, y) > array.get(stren, x)
-                tmp = array.get(stren, y)
+                float tmp = array.get(stren, y)
                 array.set(stren, y, array.get(stren, x))
+                array.set(stren, x, tmp)
                 changeit(x, y)
 
 get_level(ind) =>
@@ -116,32 +148,101 @@ get_level(ind) =>
             ret := array.get(suportresistance, ind)
     ret
 
-// Draw two yellow lines per zone (top + bottom), no filled box
-var sr_top = array.new_line(10)
-var sr_bot = array.new_line(10)
+// Dynamic level selection based on price vs PM zone
+bool has_pm      = not na(pmh_day) and not na(pml_day)
+bool above_pm    = has_pm and close > pmh_day
+bool below_pm    = has_pm and close < pml_day
 
-for x = 0 to math.min(9, maxnumsr) by 1
-    line.delete(array.get(sr_top, x))
-    line.delete(array.get(sr_bot, x))
+// How many levels to show in each direction
+int n_above = above_pm ? 3 : 2
+int n_below = below_pm ? 3 : 2
+
+// Split all 10 SR levels into above/below price, excluding levels inside PM zone
+var above_tops = array.new_float(0)
+var above_bots = array.new_float(0)
+var below_tops = array.new_float(0)
+var below_bots = array.new_float(0)
+
+array.clear(above_tops)
+array.clear(above_bots)
+array.clear(below_tops)
+array.clear(below_bots)
+
+for x = 0 to 9 by 1
     float top_lvl = get_level(x * 2)
     float bot_lvl = get_level(x * 2 + 1)
     if not na(top_lvl) and not na(bot_lvl)
-        array.set(sr_top, x, line.new(bar_index, top_lvl, bar_index + 1, top_lvl,
+        // Skip levels whose channel is entirely inside the PM zone
+        bool in_pm = has_pm and bot_lvl >= pml_day and top_lvl <= pmh_day
+        if not in_pm
+            float mid = (top_lvl + bot_lvl) / 2
+            if mid >= close
+                array.push(above_tops, top_lvl)
+                array.push(above_bots, bot_lvl)
+            else
+                array.push(below_tops, top_lvl)
+                array.push(below_bots, bot_lvl)
+
+// Bubble-sort above levels ascending by bot (closest to price first)
+for i = 0 to array.size(above_bots) - 2 by 1
+    for j = 0 to array.size(above_bots) - 2 - i by 1
+        if array.get(above_bots, j) > array.get(above_bots, j + 1)
+            float tmp_t = array.get(above_tops, j)
+            float tmp_b = array.get(above_bots, j)
+            array.set(above_tops, j, array.get(above_tops, j + 1))
+            array.set(above_bots, j, array.get(above_bots, j + 1))
+            array.set(above_tops, j + 1, tmp_t)
+            array.set(above_bots, j + 1, tmp_b)
+
+// Bubble-sort below levels descending by top (closest to price first)
+for i = 0 to array.size(below_tops) - 2 by 1
+    for j = 0 to array.size(below_tops) - 2 - i by 1
+        if array.get(below_tops, j) < array.get(below_tops, j + 1)
+            float tmp_t = array.get(below_tops, j)
+            float tmp_b = array.get(below_bots, j)
+            array.set(below_tops, j, array.get(below_tops, j + 1))
+            array.set(below_bots, j, array.get(below_bots, j + 1))
+            array.set(below_tops, j + 1, tmp_t)
+            array.set(below_bots, j + 1, tmp_b)
+
+// Delete all existing lines and redraw
+var sr_top = array.new_line(10)
+var sr_bot = array.new_line(10)
+
+for x = 0 to 9 by 1
+    line.delete(array.get(sr_top, x))
+    line.delete(array.get(sr_bot, x))
+    array.set(sr_top, x, na)
+    array.set(sr_bot, x, na)
+
+int slot = 0
+for x = 0 to math.min(n_above - 1, array.size(above_tops) - 1) by 1
+    if slot < 10
+        array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index + 1, array.get(above_tops, x),
              extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
-        array.set(sr_bot, x, line.new(bar_index, bot_lvl, bar_index + 1, bot_lvl,
+        array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index + 1, array.get(above_bots, x),
              extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+        slot += 1
+
+for x = 0 to math.min(n_below - 1, array.size(below_tops) - 1) by 1
+    if slot < 10
+        array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index + 1, array.get(below_tops, x),
+             extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+        array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index + 1, array.get(below_bots, x),
+             extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+        slot += 1
 
 // Alerts
-resistancebroken = false
-supportbroken    = false
-not_in_a_channel = true
+bool resistancebroken = false
+bool supportbroken    = false
+bool not_in_a_channel = true
 
-for x = 0 to math.min(9, maxnumsr) by 1
+for x = 0 to 9 by 1
     if close <= array.get(suportresistance, x * 2) and close >= array.get(suportresistance, x * 2 + 1)
         not_in_a_channel := false
 
 if not_in_a_channel
-    for x = 0 to math.min(9, maxnumsr) by 1
+    for x = 0 to 9 by 1
         if close[1] <= array.get(suportresistance, x * 2) and close > array.get(suportresistance, x * 2)
             resistancebroken := true
         if close[1] >= array.get(suportresistance, x * 2 + 1) and close < array.get(suportresistance, x * 2 + 1)
