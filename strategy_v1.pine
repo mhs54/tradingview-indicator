@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v3.0
+// Day Trading Strategy Indicator - v3.1
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -236,19 +236,39 @@ bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.
 
 float day_range = not na(day_high) and not na(day_low) ? day_high - day_low : na
 
-// Within 40% of day's range from the high (long) or low (short)
-bool near_high = not na(day_range) and day_range > 0 and high >= day_high - 0.40 * day_range
-bool near_low  = not na(day_range) and day_range > 0 and low  <= day_low  + 0.40 * day_range
+// State-based 40% proximity suppression.
+// Once any candle's high (long) or low (short) crosses the 40% boundary,
+// PCs are suppressed until a new day high/low is made.
+var bool suppress_long  = false
+var bool suppress_short = false
+
+if session_open
+    suppress_long  := false
+    suppress_short := false
+
+// New day extreme resets suppression
+if is_regular and not na(day_high[1]) and high > day_high[1]
+    suppress_long := false
+if is_regular and not na(day_low[1]) and low < day_low[1]
+    suppress_short := false
+
+// Any candle's high below the 40% boundary → suppress longs until new day high
+// Any candle's low above the 40% boundary → suppress shorts until new day low
+if is_regular and not na(day_range) and day_range > 0
+    if high < day_high - 0.40 * day_range
+        suppress_long := true
+    if low > day_low + 0.40 * day_range
+        suppress_short := true
 
 bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1
      and high <  high[1] and high > ref_high
-     and after_or and not in_last_hour
-     and near_high
+     and not in_last_hour
+     and not suppress_long
 
 bool pc_short_valid = is_regular and valid_tf and trend_dir == -1
      and low  >  low[1]  and low  < ref_low
-     and after_or and not in_last_hour
-     and near_low
+     and not in_last_hour
+     and not suppress_short
 
 bool pc_long_done  = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
 bool pc_short_done = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
