@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v2.9
+// Day Trading Strategy Indicator - v3.0
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -48,6 +48,12 @@ show_pm  = input.bool(true,         "Show PMH / PML (last 5 days)", group=grp_pm
 col_pm   = input.color(color.white, "Line color",                   group=grp_pm)
 
 // =============================================================================
+// INPUTS — OPENING RANGE
+// =============================================================================
+grp_or  = "Opening Range"
+show_or = input.bool(true, "Show Opening Range (9:30–9:45)", group=grp_or)
+
+// =============================================================================
 // INPUTS — PATIENCE CANDLE
 // =============================================================================
 grp_pc   = "Patience Candle"
@@ -80,6 +86,22 @@ plot(show_vwap ? vwap_val : na, "VWAP", color=col_vwap, linewidth=width_vwap)
 bool is_premarket = session.ispremarket
 bool is_regular   = session.ismarket
 bool session_open = is_regular and not is_regular[1]
+
+// =============================================================================
+// TIME OF DAY (ET)
+// =============================================================================
+int et_hour   = hour(time, "America/New_York")
+int et_minute = minute(time, "America/New_York")
+
+// Opening range = 9:30–9:44 (first 15 min)
+bool in_or       = is_regular and et_hour == 9 and et_minute < 45
+bool or_just_ended = is_regular and not in_or and in_or[1]
+
+// After opening range (9:45+) — when PC filters apply
+bool after_or = is_regular and not in_or
+
+// Last hour (3:00 PM ET onward) — no PCs
+bool in_last_hour = is_regular and et_hour >= 15
 
 // =============================================================================
 // PRE-MARKET HIGH / LOW — last 5 trading days, scoped per day
@@ -138,24 +160,55 @@ if show_pm and is_regular and not na(pmh_cur)
     line.set_x2(pml_cur, bar_index)
 
 // =============================================================================
+// OPENING RANGE HIGH / LOW
+// =============================================================================
+var float or_high = na
+var float or_low  = na
+
+if session_open
+    or_high := na
+    or_low  := na
+
+if in_or
+    or_high := na(or_high) ? high : math.max(or_high, high)
+    or_low  := na(or_low)  ? low  : math.min(or_low,  low)
+
+// Draw lines when OR closes — extend 4 bars to the right
+if show_or and or_just_ended and not na(or_high)
+    line.new(bar_index, or_high, bar_index + 4, or_high,
+         color=color.lime, width=2, style=line.style_solid)
+    line.new(bar_index, or_low,  bar_index + 4, or_low,
+         color=color.lime, width=2, style=line.style_solid)
+
+// =============================================================================
+// SESSION HIGH / LOW (for 40% proximity filter)
+// =============================================================================
+var float day_high = na
+var float day_low  = na
+
+if session_open
+    day_high := na
+    day_low  := na
+
+if is_regular
+    day_high := na(day_high) ? high : math.max(day_high, high)
+    day_low  := na(day_low)  ? low  : math.min(day_low,  low)
+
+// =============================================================================
 // TREND DIRECTION
 // Uses PMH/PML when available. Falls back to session open price when
 // pre-market data is not present on the chart.
 // =============================================================================
-
-// Session open price — fallback reference when no pre-market data
 var float sess_open_price = na
 if session_open
     sess_open_price := open
 
-// Reference levels: use PM levels if captured, else session open price
 float ref_high = na(pmh) ? sess_open_price : pmh
 float ref_low  = na(pml) ? sess_open_price : pml
 
 bool above_ref = not na(ref_high) and close > ref_high
 bool below_ref = not na(ref_low)  and close < ref_low
 
-// Alert conditions still use actual PMH/PML
 bool above_pm = not na(pmh) and close > pmh
 bool below_pm = not na(pml) and close < pml
 
@@ -173,37 +226,46 @@ if below_ref and trend_dir == 0
 // Long:  in uptrend, current bar's high did NOT break the previous bar's high
 // Short: in downtrend, current bar's low did NOT break the previous bar's low
 //
-// Arrow slides to the most recent PC bar. When the prior high/low is broken
-// (setup over), the arrow locks in place permanently as a historical marker.
-// Next pullback starts a fresh arrow. One arrow per setup.
-// Arrows only show on 2, 5, and 10 minute timeframes.
+// Filters:
+//   - Only after opening range (9:45+)
+//   - Not in last hour (before 3:00 PM)
+//   - Must be within 40% of day's range from the relevant extreme
+//   - Entry must be outside the PM zone
 // =============================================================================
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
 
-// Entry for long is above PC high — valid if PC high is above ref_high (entry outside PM zone)
-// Entry for short is below PC low — valid if PC low is below ref_low (entry outside PM zone)
-bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1  and high <  high[1] and high > ref_high
-bool pc_short_valid = is_regular and valid_tf and trend_dir == -1 and low  >  low[1]  and low  < ref_low
-bool pc_long_done   = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
-bool pc_short_done  = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
+float day_range = not na(day_high) and not na(day_low) ? day_high - day_low : na
 
-// Filled triangle arrow — width = 2 bars, height = 0.90x ATR, gap from candle = 0.15x ATR
-float atr_val  = ta.atr(14)
-float tri_h    = atr_val * 0.90
-float tri_gap  = atr_val * 0.15
+// Within 40% of day's range from the high (long) or low (short)
+bool near_high = not na(day_range) and day_range > 0 and high >= day_high - 0.40 * day_range
+bool near_low  = not na(day_range) and day_range > 0 and low  <= day_low  + 0.40 * day_range
+
+bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1
+     and high <  high[1] and high > ref_high
+     and after_or and not in_last_hour
+     and near_high
+
+bool pc_short_valid = is_regular and valid_tf and trend_dir == -1
+     and low  >  low[1]  and low  < ref_low
+     and after_or and not in_last_hour
+     and near_low
+
+bool pc_long_done  = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
+bool pc_short_done = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
+
+float atr_val = ta.atr(14)
+float tri_h   = atr_val * 0.90
+float tri_gap = atr_val * 0.15
 
 var polyline pc_poly = na
 
-// Session open: wipe slate clean
 if session_open
     polyline.delete(pc_poly)
     pc_poly := na
 
-// Breakout: forget reference without deleting — triangle freezes as historical marker
 if pc_long_done or pc_short_done
     pc_poly := na
 
-// PC bar: delete and recreate — triangle always on the most recent contained bar
 if show_pc and pc_long_valid
     polyline.delete(pc_poly)
     pc_poly := polyline.new(
