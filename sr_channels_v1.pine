@@ -8,7 +8,7 @@ ppsrc       = input.string('High/Low', 'Source',        options = ['High/Low', '
 ChannelW    = input.int(5,   'Maximum Channel Width %', minval = 1,   maxval = 8,   group = 'Settings')
 minstrength = input.int(1,   'Minimum Strength',        minval = 1,                 group = 'Settings')
 maxnumsr    = input.int(6,   'Maximum Number of S/R',   minval = 1,   maxval = 10,  group = 'Settings') - 1
-loopback    = input.int(290, 'Loopback Period',         minval = 100, maxval = 400, group = 'Settings')
+loopback_days = input.int(60, 'Loopback Period (Days)', minval = 5,   maxval = 365, group = 'Settings')
 
 // Pivot source — calculated on the hourly chart
 float src1 = ppsrc == 'High/Low' ? high : math.max(close, open)
@@ -27,9 +27,9 @@ var pivotvals = array.new_float(0)
 var pivotlocs = array.new_float(0)
 if bool(ph) or bool(pl)
     array.unshift(pivotvals, bool(ph) ? ph : pl)
-    array.unshift(pivotlocs, bar_index)
+    array.unshift(pivotlocs, time)
     for x = array.size(pivotvals) - 1 to 0 by 1
-        if bar_index - array.get(pivotlocs, x) > loopback
+        if time - array.get(pivotlocs, x) > loopback_days * 86400000
             array.pop(pivotvals)
             array.pop(pivotlocs)
             continue
@@ -75,7 +75,7 @@ if bool(ph) or bool(pl)
         h = array.get(supres, x * 3 + 1)
         l = array.get(supres, x * 3 + 2)
         s = 0
-        for y = 0 to loopback by 1
+        for y = 0 to math.min(500, bar_index) by 1
             if high[y] <= h and high[y] >= l or low[y] <= h and low[y] >= l
                 s := s + 1
         array.set(supres, x * 3, array.get(supres, x * 3) + s)
