@@ -33,7 +33,11 @@ var float pm_build_l = na
 var float pmh_day    = na
 var float pml_day    = na
 
+// Cutoff = 4:00 AM ET today (9:30 AM regular open minus 5.5 hours)
+// Pivots at or after this time are from the current trading day and are excluded
+var float today_cutoff = na
 if session_open
+    today_cutoff := time - int(5.5 * 3600000)
     pmh_day    := pm_build_h
     pml_day    := pm_build_l
     pm_build_h := na
@@ -44,10 +48,12 @@ if in_premarket
     pm_build_l := na(pm_build_l) ? low  : math.min(pm_build_l, low)
 
 // Collect pivot values (cap at 100 for performance)
+// Exclude any pivot from the current trading day (on or after 4 AM ET today)
 var pivotvals = array.new_float(0)
 var pivotlocs = array.new_float(0)
 
-if bool(ph) or bool(pl)
+bool pivot_from_prior_day = na(today_cutoff) or time < today_cutoff
+if (bool(ph) or bool(pl)) and pivot_from_prior_day
     array.unshift(pivotvals, bool(ph) ? ph : pl)
     array.unshift(pivotlocs, time)
     // Prune pivots older than loopback_days
