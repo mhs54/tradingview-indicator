@@ -184,26 +184,30 @@ for x = 0 to 9 by 1
                 array.push(below_bots, bot_lvl)
 
 // Bubble-sort above levels ascending by bot (closest to price first)
-for i = 0 to array.size(above_bots) - 2 by 1
-    for j = 0 to array.size(above_bots) - 2 - i by 1
-        if array.get(above_bots, j) > array.get(above_bots, j + 1)
-            float tmp_t = array.get(above_tops, j)
-            float tmp_b = array.get(above_bots, j)
-            array.set(above_tops, j, array.get(above_tops, j + 1))
-            array.set(above_bots, j, array.get(above_bots, j + 1))
-            array.set(above_tops, j + 1, tmp_t)
-            array.set(above_bots, j + 1, tmp_b)
+int above_sz = array.size(above_bots)
+if above_sz >= 2
+    for i = 0 to above_sz - 2 by 1
+        for j = 0 to above_sz - 2 - i by 1
+            if array.get(above_bots, j) > array.get(above_bots, j + 1)
+                float tmp_t = array.get(above_tops, j)
+                float tmp_b = array.get(above_bots, j)
+                array.set(above_tops, j, array.get(above_tops, j + 1))
+                array.set(above_bots, j, array.get(above_bots, j + 1))
+                array.set(above_tops, j + 1, tmp_t)
+                array.set(above_bots, j + 1, tmp_b)
 
 // Bubble-sort below levels descending by top (closest to price first)
-for i = 0 to array.size(below_tops) - 2 by 1
-    for j = 0 to array.size(below_tops) - 2 - i by 1
-        if array.get(below_tops, j) < array.get(below_tops, j + 1)
-            float tmp_t = array.get(below_tops, j)
-            float tmp_b = array.get(below_bots, j)
-            array.set(below_tops, j, array.get(below_tops, j + 1))
-            array.set(below_bots, j, array.get(below_bots, j + 1))
-            array.set(below_tops, j + 1, tmp_t)
-            array.set(below_bots, j + 1, tmp_b)
+int below_sz = array.size(below_tops)
+if below_sz >= 2
+    for i = 0 to below_sz - 2 by 1
+        for j = 0 to below_sz - 2 - i by 1
+            if array.get(below_tops, j) < array.get(below_tops, j + 1)
+                float tmp_t = array.get(below_tops, j)
+                float tmp_b = array.get(below_bots, j)
+                array.set(below_tops, j, array.get(below_tops, j + 1))
+                array.set(below_bots, j, array.get(below_bots, j + 1))
+                array.set(below_tops, j + 1, tmp_t)
+                array.set(below_bots, j + 1, tmp_b)
 
 // Delete all existing lines and redraw
 var sr_top = array.new_line(10)
