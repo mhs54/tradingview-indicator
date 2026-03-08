@@ -130,8 +130,8 @@ var line    pmh_cur    = na
 var line    pml_cur    = na
 
 if show_pm and session_open and not na(pmh) and not na(pml)
-    line new_pmh = line.new(bar_index, pmh, bar_index + 1, pmh, color=col_pm, width=1, style=line.style_solid)
-    line new_pml = line.new(bar_index, pml, bar_index + 1, pml, color=col_pm, width=1, style=line.style_solid)
+    line new_pmh = line.new(bar_index, pmh, bar_index + 1, pmh, color=col_pm, width=1, style=line.style_solid, extend=extend.right)
+    line new_pml = line.new(bar_index, pml, bar_index + 1, pml, color=col_pm, width=1, style=line.style_solid, extend=extend.right)
     array.push(pmh_lines, new_pmh)
     array.push(pml_lines, new_pml)
     pmh_cur := new_pmh
@@ -150,9 +150,6 @@ if show_pm and session_open and not na(pmh) and not na(pml)
         label.delete(array.shift(pmh_labels))
         label.delete(array.shift(pml_labels))
 
-if show_pm and is_regular and not na(pmh_cur)
-    line.set_x2(pmh_cur, bar_index)
-    line.set_x2(pml_cur, bar_index)
 
 // =============================================================================
 // OPENING RANGE HIGH / LOW — drawn at 9:45, extends 4 bars right

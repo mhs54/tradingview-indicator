@@ -1,0 +1,151 @@
+// Based on "Support Resistance Channels" by LonesomeTheBlue
+// Modified: zones replaced with yellow boundary lines, pivots from hourly timeframe
+//@version=6
+indicator('SR Channels (Hourly)', 'SRchannel', overlay = true, max_bars_back = 501, max_lines_count = 500)
+
+prd         = input.int(10,  'Pivot Period',            minval = 4,   maxval = 30,  group = 'Settings')
+ppsrc       = input.string('High/Low', 'Source',        options = ['High/Low', 'Close/Open'], group = 'Settings')
+ChannelW    = input.int(5,   'Maximum Channel Width %', minval = 1,   maxval = 8,   group = 'Settings')
+minstrength = input.int(1,   'Minimum Strength',        minval = 1,                 group = 'Settings')
+maxnumsr    = input.int(6,   'Maximum Number of S/R',   minval = 1,   maxval = 10,  group = 'Settings') - 1
+loopback    = input.int(290, 'Loopback Period',         minval = 100, maxval = 400, group = 'Settings')
+
+// Pivot source — calculated on the hourly chart
+float src1 = ppsrc == 'High/Low' ? high : math.max(close, open)
+float src2 = ppsrc == 'High/Low' ? low  : math.min(close, open)
+
+float ph = request.security(syminfo.tickerid, '60', ta.pivothigh(src1, prd, prd))
+float pl = request.security(syminfo.tickerid, '60', ta.pivotlow(src2,  prd, prd))
+
+// Channel width based on hourly range
+prdhighest = request.security(syminfo.tickerid, '60', ta.highest(300))
+prdlowest  = request.security(syminfo.tickerid, '60', ta.lowest(300))
+cwidth = (prdhighest - prdlowest) * ChannelW / 100
+
+// Collect pivot values
+var pivotvals = array.new_float(0)
+var pivotlocs = array.new_float(0)
+if bool(ph) or bool(pl)
+    array.unshift(pivotvals, bool(ph) ? ph : pl)
+    array.unshift(pivotlocs, bar_index)
+    for x = array.size(pivotvals) - 1 to 0 by 1
+        if bar_index - array.get(pivotlocs, x) > loopback
+            array.pop(pivotvals)
+            array.pop(pivotlocs)
+            continue
+        break
+
+// Build SR channel for a given pivot
+get_sr_vals(ind) =>
+    float lo = array.get(pivotvals, ind)
+    float hi = lo
+    int numpp = 0
+    for y = 0 to array.size(pivotvals) - 1 by 1
+        float cpp = array.get(pivotvals, y)
+        float wdth = cpp <= hi ? hi - cpp : cpp - lo
+        if wdth <= cwidth
+            if cpp <= hi
+                lo := math.min(lo, cpp)
+            else
+                hi := math.max(hi, cpp)
+            numpp := numpp + 20
+    [hi, lo, numpp]
+
+var suportresistance = array.new_float(20, 0)
+
+changeit(x, y) =>
+    tmp = array.get(suportresistance, y * 2)
+    array.set(suportresistance, y * 2, array.get(suportresistance, x * 2))
+    array.set(suportresistance, x * 2, tmp)
+    tmp := array.get(suportresistance, y * 2 + 1)
+    array.set(suportresistance, y * 2 + 1, array.get(suportresistance, x * 2 + 1))
+    array.set(suportresistance, x * 2 + 1, tmp)
+
+if bool(ph) or bool(pl)
+    supres = array.new_float(0)
+    stren  = array.new_float(10, 0)
+
+    for x = 0 to array.size(pivotvals) - 1 by 1
+        [hi, lo, strength] = get_sr_vals(x)
+        array.push(supres, strength)
+        array.push(supres, hi)
+        array.push(supres, lo)
+
+    for x = 0 to array.size(pivotvals) - 1 by 1
+        h = array.get(supres, x * 3 + 1)
+        l = array.get(supres, x * 3 + 2)
+        s = 0
+        for y = 0 to loopback by 1
+            if high[y] <= h and high[y] >= l or low[y] <= h and low[y] >= l
+                s := s + 1
+        array.set(supres, x * 3, array.get(supres, x * 3) + s)
+
+    array.fill(suportresistance, 0)
+    src = 0
+    for x = 0 to array.size(pivotvals) - 1 by 1
+        stv = -1.
+        stl = -1
+        for y = 0 to array.size(pivotvals) - 1 by 1
+            if array.get(supres, y * 3) > stv and array.get(supres, y * 3) >= minstrength * 20
+                stv := array.get(supres, y * 3)
+                stl := y
+        if stl >= 0
+            hh = array.get(supres, stl * 3 + 1)
+            ll = array.get(supres, stl * 3 + 2)
+            array.set(suportresistance, src * 2,     hh)
+            array.set(suportresistance, src * 2 + 1, ll)
+            array.set(stren, src, array.get(supres, stl * 3))
+            for y = 0 to array.size(pivotvals) - 1 by 1
+                if array.get(supres, y * 3 + 1) <= hh and array.get(supres, y * 3 + 1) >= ll or array.get(supres, y * 3 + 2) <= hh and array.get(supres, y * 3 + 2) >= ll
+                    array.set(supres, y * 3, -1)
+            src := src + 1
+            if src >= 10
+                break
+
+    for x = 0 to 8 by 1
+        for y = x + 1 to 9 by 1
+            if array.get(stren, y) > array.get(stren, x)
+                tmp = array.get(stren, y)
+                array.set(stren, y, array.get(stren, x))
+                changeit(x, y)
+
+get_level(ind) =>
+    float ret = na
+    if ind < array.size(suportresistance)
+        if array.get(suportresistance, ind) != 0
+            ret := array.get(suportresistance, ind)
+    ret
+
+// Draw two yellow lines per zone (top + bottom), no filled box
+var sr_top = array.new_line(10)
+var sr_bot = array.new_line(10)
+
+for x = 0 to math.min(9, maxnumsr) by 1
+    line.delete(array.get(sr_top, x))
+    line.delete(array.get(sr_bot, x))
+    float top_lvl = get_level(x * 2)
+    float bot_lvl = get_level(x * 2 + 1)
+    if not na(top_lvl) and not na(bot_lvl)
+        array.set(sr_top, x, line.new(bar_index, top_lvl, bar_index + 1, top_lvl,
+             extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+        array.set(sr_bot, x, line.new(bar_index, bot_lvl, bar_index + 1, bot_lvl,
+             extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+
+// Alerts
+resistancebroken = false
+supportbroken    = false
+not_in_a_channel = true
+
+for x = 0 to math.min(9, maxnumsr) by 1
+    if close <= array.get(suportresistance, x * 2) and close >= array.get(suportresistance, x * 2 + 1)
+        not_in_a_channel := false
+
+if not_in_a_channel
+    for x = 0 to math.min(9, maxnumsr) by 1
+        if close[1] <= array.get(suportresistance, x * 2) and close > array.get(suportresistance, x * 2)
+            resistancebroken := true
+        if close[1] >= array.get(suportresistance, x * 2 + 1) and close < array.get(suportresistance, x * 2 + 1)
+            supportbroken := true
+
+alertcondition(resistancebroken, title = 'Resistance Broken', message = 'Resistance Broken')
+alertcondition(supportbroken,    title = 'Support Broken',    message = 'Support Broken')
