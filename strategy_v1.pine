@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v3.1
+// Day Trading Strategy Indicator - v3.2
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -93,15 +93,9 @@ bool session_open = is_regular and not is_regular[1]
 int et_hour   = hour(time, "America/New_York")
 int et_minute = minute(time, "America/New_York")
 
-// Opening range = 9:30–9:44 (first 15 min)
-bool in_or       = is_regular and et_hour == 9 and et_minute < 45
+bool in_or         = is_regular and et_hour == 9 and et_minute < 45
 bool or_just_ended = is_regular and not in_or and in_or[1]
-
-// After opening range (9:45+) — when PC filters apply
-bool after_or = is_regular and not in_or
-
-// Last hour (3:00 PM ET onward) — no PCs
-bool in_last_hour = is_regular and et_hour >= 15
+bool in_last_hour  = is_regular and et_hour >= 15
 
 // =============================================================================
 // PRE-MARKET HIGH / LOW — last 5 trading days, scoped per day
@@ -160,7 +154,7 @@ if show_pm and is_regular and not na(pmh_cur)
     line.set_x2(pml_cur, bar_index)
 
 // =============================================================================
-// OPENING RANGE HIGH / LOW
+// OPENING RANGE HIGH / LOW — drawn at 9:45, extends 4 bars right
 // =============================================================================
 var float or_high = na
 var float or_low  = na
@@ -173,26 +167,9 @@ if in_or
     or_high := na(or_high) ? high : math.max(or_high, high)
     or_low  := na(or_low)  ? low  : math.min(or_low,  low)
 
-// Draw lines when OR closes — extend 4 bars to the right
 if show_or and or_just_ended and not na(or_high)
-    line.new(bar_index, or_high, bar_index + 4, or_high,
-         color=color.lime, width=2, style=line.style_solid)
-    line.new(bar_index, or_low,  bar_index + 4, or_low,
-         color=color.lime, width=2, style=line.style_solid)
-
-// =============================================================================
-// SESSION HIGH / LOW (for 40% proximity filter)
-// =============================================================================
-var float day_high = na
-var float day_low  = na
-
-if session_open
-    day_high := na
-    day_low  := na
-
-if is_regular
-    day_high := na(day_high) ? high : math.max(day_high, high)
-    day_low  := na(day_low)  ? low  : math.min(day_low,  low)
+    line.new(bar_index, or_high, bar_index + 4, or_high, color=color.lime, width=2, style=line.style_solid)
+    line.new(bar_index, or_low,  bar_index + 4, or_low,  color=color.lime, width=2, style=line.style_solid)
 
 // =============================================================================
 // TREND DIRECTION
@@ -227,48 +204,18 @@ if below_ref and trend_dir == 0
 // Short: in downtrend, current bar's low did NOT break the previous bar's low
 //
 // Filters:
-//   - Only after opening range (9:45+)
-//   - Not in last hour (before 3:00 PM)
-//   - Must be within 40% of day's range from the relevant extreme
-//   - Entry must be outside the PM zone
+//   - Entry must be outside PM zone
+//   - No PCs in the last hour (3:00 PM ET onward)
 // =============================================================================
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
-
-float day_range = not na(day_high) and not na(day_low) ? day_high - day_low : na
-
-// State-based 40% proximity suppression.
-// Once any candle's high (long) or low (short) crosses the 40% boundary,
-// PCs are suppressed until a new day high/low is made.
-var bool suppress_long  = false
-var bool suppress_short = false
-
-if session_open
-    suppress_long  := false
-    suppress_short := false
-
-// New day extreme resets suppression
-if is_regular and not na(day_high[1]) and high > day_high[1]
-    suppress_long := false
-if is_regular and not na(day_low[1]) and low < day_low[1]
-    suppress_short := false
-
-// Any candle's high below the 40% boundary → suppress longs until new day high
-// Any candle's low above the 40% boundary → suppress shorts until new day low
-if is_regular and not na(day_range) and day_range > 0
-    if high < day_high - 0.40 * day_range
-        suppress_long := true
-    if low > day_low + 0.40 * day_range
-        suppress_short := true
 
 bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1
      and high <  high[1] and high > ref_high
      and not in_last_hour
-     and not suppress_long
 
 bool pc_short_valid = is_regular and valid_tf and trend_dir == -1
      and low  >  low[1]  and low  < ref_low
      and not in_last_hour
-     and not suppress_short
 
 bool pc_long_done  = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
 bool pc_short_done = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
