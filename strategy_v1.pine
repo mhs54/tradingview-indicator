@@ -130,6 +130,14 @@ var line    pmh_cur    = na
 var line    pml_cur    = na
 
 if show_pm and session_open and not na(pmh) and not na(pml)
+    // Cap previous day's lines at the last bar of that session
+    if not na(pmh_cur)
+        line.set_extend(pmh_cur, extend.none)
+        line.set_x2(pmh_cur, bar_index - 1)
+    if not na(pml_cur)
+        line.set_extend(pml_cur, extend.none)
+        line.set_x2(pml_cur, bar_index - 1)
+
     line new_pmh = line.new(bar_index, pmh, bar_index + 1, pmh, color=col_pm, width=1, style=line.style_solid, extend=extend.right)
     line new_pml = line.new(bar_index, pml, bar_index + 1, pml, color=col_pm, width=1, style=line.style_solid, extend=extend.right)
     array.push(pmh_lines, new_pmh)
