@@ -56,8 +56,9 @@ show_or = input.bool(true, "Show Opening Range (9:30–9:45)", group=grp_or)
 // =============================================================================
 // INPUTS — PATIENCE CANDLE
 // =============================================================================
-grp_pc   = "Patience Candle"
-show_pc  = input.bool(true, "Show Patience Candle Arrows", group=grp_pc)
+grp_pc        = "Patience Candle"
+show_pc       = input.bool(true,  "Show Patience Candle Arrows",         group=grp_pc)
+warn_sma_dist = input.float(1.0,  "Hourly 200 SMA Warning Distance ($)", group=grp_pc, minval=0.1, step=0.25)
 
 // =============================================================================
 // MOVING AVERAGES
@@ -267,11 +268,18 @@ float atr_val = ta.atr(14)
 float tri_h   = atr_val * 0.90
 float tri_gap = atr_val * 0.15
 
+// Hourly 200 SMA warning — within $X in the direction of the trade
+bool warn_long  = not na(sma200_1h) and sma200_1h > high and sma200_1h - high <= warn_sma_dist
+bool warn_short = not na(sma200_1h) and sma200_1h < low  and low - sma200_1h  <= warn_sma_dist
+
 var polyline pc_poly = na
+var label    pc_warn = na
 
 if session_open
     polyline.delete(pc_poly)
+    label.delete(pc_warn)
     pc_poly := na
+    pc_warn := na
 
 // Lock arrow (keep visible, forget reference) when: triggered OR 40% retracement just hit
 bool retrace_short_hit = trend_dir == -1 and suppress_short and not suppress_short[1]
@@ -280,9 +288,12 @@ bool retrace_just_hit  = retrace_short_hit or retrace_long_hit
 
 if pc_long_done or pc_short_done or retrace_just_hit
     pc_poly := na
+    pc_warn := na
 
 if show_pc and pc_long_valid and not suppress_long
     polyline.delete(pc_poly)
+    label.delete(pc_warn)
+    pc_warn := na
     pc_poly := polyline.new(
          array.from(
              chart.point.from_index(bar_index,     low - tri_gap),
@@ -290,10 +301,16 @@ if show_pc and pc_long_valid and not suppress_long
              chart.point.from_index(bar_index + 1, low - tri_gap - tri_h)),
          closed=true,
          fill_color=color.new(color.green, 0),
-         line_color=color.new(color.green, 0))
+         line_color=warn_long ? color.yellow : color.new(color.green, 0),
+         line_width=warn_long ? 2 : 1)
+    if warn_long
+        pc_warn := label.new(bar_index, low - tri_gap - tri_h - (atr_val * 0.15), "!",
+             style=label.style_none, textcolor=color.yellow, size=size.normal)
 
 else if show_pc and pc_short_valid and not suppress_short
     polyline.delete(pc_poly)
+    label.delete(pc_warn)
+    pc_warn := na
     pc_poly := polyline.new(
          array.from(
              chart.point.from_index(bar_index,     high + tri_gap),
@@ -301,7 +318,11 @@ else if show_pc and pc_short_valid and not suppress_short
              chart.point.from_index(bar_index + 1, high + tri_gap + tri_h)),
          closed=true,
          fill_color=color.new(color.red, 0),
-         line_color=color.new(color.red, 0))
+         line_color=warn_short ? color.yellow : color.new(color.red, 0),
+         line_width=warn_short ? 2 : 1)
+    if warn_short
+        pc_warn := label.new(bar_index, high + tri_gap + tri_h + (atr_val * 0.15), "!",
+             style=label.style_none, textcolor=color.yellow, size=size.normal)
 
 // =============================================================================
 // ALERTS
