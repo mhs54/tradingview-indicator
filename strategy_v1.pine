@@ -1,5 +1,5 @@
 // =============================================================================
-// Day Trading Strategy Indicator - v3.2
+// Day Trading Strategy Indicator - v3.3
 // Strategy: Levels + Trend + Patience Candle
 // Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
 // NOTE: S/R levels are drawn manually on the hourly chart before market open.
@@ -198,14 +198,33 @@ if below_ref and trend_dir == 0
     trend_dir := -1
 
 // =============================================================================
+// SESSION HIGH / LOW (for 40% retracement filter)
+// =============================================================================
+var float day_high = na
+var float day_low  = na
+
+if session_open
+    day_high := na
+    day_low  := na
+
+if is_regular
+    day_high := na(day_high) ? high : math.max(day_high, high)
+    day_low  := na(day_low)  ? low  : math.min(day_low,  low)
+
+// =============================================================================
 // PATIENCE CANDLE DETECTION
 //
 // Long:  in uptrend, current bar's high did NOT break the previous bar's high
 // Short: in downtrend, current bar's low did NOT break the previous bar's low
 //
 // Filters:
-//   - Entry must be outside PM zone
+//   - Entry must be outside PM zone (high > ref_high for long, low < ref_low for short)
 //   - No PCs in the last hour (3:00 PM ET onward)
+//   - 40% retracement suppression: once ANY candle's high (short) or low (long)
+//     retraces 40% of the day's range back from the extreme, suppress all PCs
+//     until a new day high/low is made.
+//
+// Arrow persists until: entry triggered (new extreme) OR 40% retracement hit.
 // =============================================================================
 bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
 
@@ -220,6 +239,30 @@ bool pc_short_valid = is_regular and valid_tf and trend_dir == -1
 bool pc_long_done  = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
 bool pc_short_done = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
 
+// 40% retracement thresholds
+float day_range = not na(day_high) and not na(day_low) ? day_high - day_low : na
+float retrace_long  = not na(day_range) and day_range > 0 ? day_high - 0.40 * day_range : na
+float retrace_short = not na(day_range) and day_range > 0 ? day_low  + 0.40 * day_range : na
+
+var bool suppress_long  = false
+var bool suppress_short = false
+
+if session_open
+    suppress_long  := false
+    suppress_short := false
+
+// Any candle hitting 40% retracement activates suppression
+if is_regular and not na(retrace_short) and trend_dir == -1 and high >= retrace_short
+    suppress_short := true
+if is_regular and not na(retrace_long)  and trend_dir == 1  and low  <= retrace_long
+    suppress_long  := true
+
+// New day extreme resets suppression
+if is_regular and not na(day_low[1])  and low  < day_low[1]
+    suppress_short := false
+if is_regular and not na(day_high[1]) and high > day_high[1]
+    suppress_long  := false
+
 float atr_val = ta.atr(14)
 float tri_h   = atr_val * 0.90
 float tri_gap = atr_val * 0.15
@@ -230,10 +273,14 @@ if session_open
     polyline.delete(pc_poly)
     pc_poly := na
 
-if pc_long_done or pc_short_done
+// Lock arrow (keep visible, forget reference) when: triggered OR 40% retracement just hit
+bool retrace_just_hit = (trend_dir == -1 and suppress_short and not suppress_short[1]) or
+                        (trend_dir == 1  and suppress_long  and not suppress_long[1])
+
+if pc_long_done or pc_short_done or retrace_just_hit
     pc_poly := na
 
-if show_pc and pc_long_valid
+if show_pc and pc_long_valid and not suppress_long
     polyline.delete(pc_poly)
     pc_poly := polyline.new(
          array.from(
@@ -244,7 +291,7 @@ if show_pc and pc_long_valid
          fill_color=color.new(color.green, 0),
          line_color=color.new(color.green, 0))
 
-else if show_pc and pc_short_valid
+else if show_pc and pc_short_valid and not suppress_short
     polyline.delete(pc_poly)
     pc_poly := polyline.new(
          array.from(
