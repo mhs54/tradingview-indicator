@@ -220,21 +220,26 @@ for x = 0 to 9 by 1
     array.set(sr_bot, x, na)
 
 int slot = 0
-for x = 0 to math.min(n_above - 1, array.size(above_tops) - 1) by 1
-    if slot < 10
-        array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index + 1, array.get(above_tops, x),
-             extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
-        array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index + 1, array.get(above_bots, x),
-             extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
-        slot += 1
+int draw_above = math.min(n_above, array.size(above_tops))
+int draw_below = math.min(n_below, array.size(below_tops))
 
-for x = 0 to math.min(n_below - 1, array.size(below_tops) - 1) by 1
-    if slot < 10
-        array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index + 1, array.get(below_tops, x),
-             extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
-        array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index + 1, array.get(below_bots, x),
-             extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
-        slot += 1
+if draw_above > 0
+    for x = 0 to draw_above - 1 by 1
+        if slot < 10
+            array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index + 1, array.get(above_tops, x),
+                 extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+            array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index + 1, array.get(above_bots, x),
+                 extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+            slot += 1
+
+if draw_below > 0
+    for x = 0 to draw_below - 1 by 1
+        if slot < 10
+            array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index + 1, array.get(below_tops, x),
+                 extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+            array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index + 1, array.get(below_bots, x),
+                 extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+            slot += 1
 
 // Alerts
 bool resistancebroken = false
