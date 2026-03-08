@@ -274,8 +274,9 @@ if session_open
     pc_poly := na
 
 // Lock arrow (keep visible, forget reference) when: triggered OR 40% retracement just hit
-bool retrace_just_hit = (trend_dir == -1 and suppress_short and not suppress_short[1]) or
-                        (trend_dir == 1  and suppress_long  and not suppress_long[1])
+bool retrace_short_hit = trend_dir == -1 and suppress_short and not suppress_short[1]
+bool retrace_long_hit  = trend_dir == 1  and suppress_long  and not suppress_long[1]
+bool retrace_just_hit  = retrace_short_hit or retrace_long_hit
 
 if pc_long_done or pc_short_done or retrace_just_hit
     pc_poly := na
