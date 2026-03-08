@@ -303,9 +303,8 @@ if show_pc and pc_long_valid and not suppress_long
          fill_color=color.new(color.green, 0),
          line_color=warn_long ? color.yellow : color.new(color.green, 0))
     if warn_long
-        pc_warn := label.new(bar_index + 2, low - tri_gap - tri_h / 2, "!",
-             style=label.style_label_left, color=color.new(color.black, 100),
-             textcolor=color.yellow, size=size.huge)
+        pc_warn := label.new(bar_index, low - tri_gap - tri_h - (atr_val * 0.15), "!",
+             style=label.style_none, textcolor=color.yellow, size=size.huge)
 
 else if show_pc and pc_short_valid and not suppress_short
     polyline.delete(pc_poly)
@@ -320,9 +319,8 @@ else if show_pc and pc_short_valid and not suppress_short
          fill_color=color.new(color.red, 0),
          line_color=warn_short ? color.yellow : color.new(color.red, 0))
     if warn_short
-        pc_warn := label.new(bar_index + 2, high + tri_gap + tri_h / 2, "!",
-             style=label.style_label_left, color=color.new(color.black, 100),
-             textcolor=color.yellow, size=size.huge)
+        pc_warn := label.new(bar_index, high + tri_gap + tri_h + (atr_val * 0.15), "!",
+             style=label.style_none, textcolor=color.yellow, size=size.huge)
 
 // =============================================================================
 // ALERTS
