@@ -402,15 +402,6 @@ if (bool(ph) or bool(pl)) and array.size(pivotvals) > 0
         array.push(supres, hi)
         array.push(supres, lo)
 
-    for x = 0 to npv - 1 by 1
-        float h = array.get(supres, x * 3 + 1)
-        float l = array.get(supres, x * 3 + 2)
-        int s = 0
-        for y = 0 to math.min(100, bar_index) by 1
-            if high[y] <= h and high[y] >= l or low[y] <= h and low[y] >= l
-                s := s + 1
-        array.set(supres, x * 3, array.get(supres, x * 3) + s)
-
     array.fill(suportresistance, 0)
     int src = 0
     for x = 0 to npv - 1 by 1
@@ -448,10 +439,14 @@ get_level(ind) =>
             ret := array.get(suportresistance, ind)
     ret
 
-// Draw 3 closest SR levels above and below price (dirty flag — only on new pivot)
+// SR level arrays — recomputed only when a new hourly pivot fires
 var bool levels_dirty = true
+var bool lines_dirty  = true
+
 if (bool(ph) or bool(pl)) and array.size(pivotvals) > 0
     levels_dirty := true
+if session_open
+    lines_dirty := true
 
 var above_tops = array.new_float(0)
 var above_bots = array.new_float(0)
@@ -460,7 +455,8 @@ var below_bots = array.new_float(0)
 var sr_top     = array.new_line(10)
 var sr_bot     = array.new_line(10)
 
-if show_sr and levels_dirty
+// Step 1 — recompute sorted level arrays on new pivot
+if levels_dirty
     array.clear(above_tops)
     array.clear(above_bots)
     array.clear(below_tops)
@@ -505,6 +501,11 @@ if show_sr and levels_dirty
                     array.set(below_tops, j + 1, tmp_t)
                     array.set(below_bots, j + 1, tmp_b)
 
+    levels_dirty := false
+    lines_dirty  := true
+
+// Step 2 — draw lines at session open or when levels change (regular session only)
+if show_sr and lines_dirty and is_regular
     for x = 0 to 9 by 1
         line.delete(array.get(sr_top, x))
         line.delete(array.get(sr_bot, x))
@@ -518,22 +519,29 @@ if show_sr and levels_dirty
     if draw_above > 0
         for x = 0 to draw_above - 1 by 1
             if slot < 10
-                array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index + 1, array.get(above_tops, x),
-                     extend=extend.both, color=color.yellow, width=1, style=line.style_solid))
-                array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index + 1, array.get(above_bots, x),
-                     extend=extend.both, color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index, array.get(above_tops, x),
+                     color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index, array.get(above_bots, x),
+                     color=color.yellow, width=1, style=line.style_solid))
                 slot += 1
 
     if draw_below > 0
         for x = 0 to draw_below - 1 by 1
             if slot < 10
-                array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index + 1, array.get(below_tops, x),
-                     extend=extend.both, color=color.yellow, width=1, style=line.style_solid))
-                array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index + 1, array.get(below_bots, x),
-                     extend=extend.both, color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index, array.get(below_tops, x),
+                     color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index, array.get(below_bots, x),
+                     color=color.yellow, width=1, style=line.style_solid))
                 slot += 1
 
-    levels_dirty := false
+    lines_dirty := false
+
+// Step 3 — extend SR lines rightward each regular session bar
+if show_sr and is_regular
+    for x = 0 to 9 by 1
+        if not na(array.get(sr_top, x))
+            line.set_x2(array.get(sr_top, x), bar_index)
+            line.set_x2(array.get(sr_bot, x), bar_index)
 
 // =============================================================================
 // ALERTS
