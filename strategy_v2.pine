@@ -331,29 +331,19 @@ if is_premarket
 float pmh = pm_locked ? pm_high_locked : pm_high
 float pml = pm_locked ? pm_low_locked  : pm_low
 
-var line[]  pmh_lines  = array.new<line>()
-var line[]  pml_lines  = array.new<line>()
-var label[] pmh_labels = array.new<label>()
-var label[] pml_labels = array.new<label>()
-var line    pmh_cur    = na
-var line    pml_cur    = na
+var line[] pmh_lines = array.new<line>()
+var line[] pml_lines = array.new<line>()
+var line   pmh_cur   = na
+var line   pml_cur   = na
 
 if show_pm and session_open and not na(pmh) and not na(pml)
     pmh_cur := line.new(bar_index, pmh, bar_index + 1, pmh, color=col_pm, width=1, style=line.style_solid, extend=extend.right)
     pml_cur := line.new(bar_index, pml, bar_index + 1, pml, color=col_pm, width=1, style=line.style_solid, extend=extend.right)
     array.push(pmh_lines, pmh_cur)
     array.push(pml_lines, pml_cur)
-    label lh = label.new(bar_index, pmh, "PMH " + str.tostring(pmh, "#.##"),
-         color=color.new(color.white, 100), textcolor=col_pm, size=size.small, style=label.style_label_right)
-    label ll = label.new(bar_index, pml, "PML " + str.tostring(pml, "#.##"),
-         color=color.new(color.white, 100), textcolor=col_pm, size=size.small, style=label.style_label_right)
-    array.push(pmh_labels, lh)
-    array.push(pml_labels, ll)
     while array.size(pmh_lines) > 5
         line.delete(array.shift(pmh_lines))
         line.delete(array.shift(pml_lines))
-        label.delete(array.shift(pmh_labels))
-        label.delete(array.shift(pml_labels))
 
 if show_pm and session_close and not na(pmh_cur)
     line.set_extend(pmh_cur, extend.none)
@@ -491,17 +481,11 @@ bool retrace_long_hit  = trend_dir == 1  and suppress_long  and not suppress_lon
 bool retrace_just_hit  = retrace_short_hit or retrace_long_hit
 
 if pc_long_done or pc_short_done or retrace_just_hit
-    polyline.delete(pc_poly)
-    label.delete(pc_warn)
-    label.delete(pc_aplus_lbl)
     pc_poly      := na
     pc_warn      := na
     pc_aplus_lbl := na
 
 if show_pc and pc_long_valid and not suppress_long
-    polyline.delete(pc_poly)
-    label.delete(pc_warn)
-    label.delete(pc_aplus_lbl)
     pc_warn      := na
     pc_aplus_lbl := na
     color tri_fill_long = aplus_long ? color.new(color.orange, 0) : color.new(color.green, 0)
@@ -522,9 +506,6 @@ if show_pc and pc_long_valid and not suppress_long
              style=label.style_none, textcolor=color.orange, size=size.normal)
 
 else if show_pc and pc_short_valid and not suppress_short
-    polyline.delete(pc_poly)
-    label.delete(pc_warn)
-    label.delete(pc_aplus_lbl)
     pc_warn      := na
     pc_aplus_lbl := na
     color tri_fill_short = aplus_short ? color.new(color.orange, 0) : color.new(color.red, 0)
