@@ -510,21 +510,23 @@ if show_sr and session_open
     int draw_above = math.min(3, array.size(above_tops))
     int draw_below = math.min(3, array.size(below_tops))
 
-    for x = 0 to draw_above - 1 by 1
-        if slot < 10
-            array.set(sr_top, slot, line.new(hist_x, array.get(above_tops, x), bar_index, array.get(above_tops, x),
-                 extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
-            array.set(sr_bot, slot, line.new(hist_x, array.get(above_bots, x), bar_index, array.get(above_bots, x),
-                 extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
-            slot += 1
+    if draw_above > 0
+        for x = 0 to draw_above - 1 by 1
+            if slot < 10
+                array.set(sr_top, slot, line.new(hist_x, array.get(above_tops, x), bar_index, array.get(above_tops, x),
+                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_bot, slot, line.new(hist_x, array.get(above_bots, x), bar_index, array.get(above_bots, x),
+                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
+                slot += 1
 
-    for x = 0 to draw_below - 1 by 1
-        if slot < 10
-            array.set(sr_top, slot, line.new(hist_x, array.get(below_tops, x), bar_index, array.get(below_tops, x),
-                 extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
-            array.set(sr_bot, slot, line.new(hist_x, array.get(below_bots, x), bar_index, array.get(below_bots, x),
-                 extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
-            slot += 1
+    if draw_below > 0
+        for x = 0 to draw_below - 1 by 1
+            if slot < 10
+                array.set(sr_top, slot, line.new(hist_x, array.get(below_tops, x), bar_index, array.get(below_tops, x),
+                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_bot, slot, line.new(hist_x, array.get(below_bots, x), bar_index, array.get(below_bots, x),
+                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
+                slot += 1
 
 // Cap SR lines at session close so they don't bleed into next day's pre-market
 if show_sr and session_close
