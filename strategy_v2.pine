@@ -176,6 +176,85 @@ get_sr_levels() =>
      array.get(sr, 18), array.get(sr, 19)]
 
 // =============================================================================
+// MTF PATIENCE CANDLE DETECTION FUNCTION
+// Self-contained — replicates PM level, trend, and suppression logic so it
+// can be called via request.security on any timeframe independently.
+// Returns [pc_long, pc_short] booleans on confirmed bars only.
+// =============================================================================
+get_pc_conditions() =>
+    bool _is_pm    = session.ispremarket
+    bool _is_reg   = session.ismarket
+    bool _sess_open = _is_reg and not _is_reg[1]
+    int  _et_hour   = hour(time, "America/New_York")
+    bool _in_last_hour = _is_reg and _et_hour >= 15
+
+    var float _pmh      = na
+    var float _pml      = na
+    var float _pmh_lock = na
+    var float _pml_lock = na
+    var bool  _locked   = false
+
+    if _sess_open
+        _pmh_lock := _pmh
+        _pml_lock := _pml
+        _pmh      := na
+        _pml      := na
+        _locked   := true
+    if _is_pm
+        _pmh    := na(_pmh) ? high : math.max(_pmh, high)
+        _pml    := na(_pml) ? low  : math.min(_pml, low)
+        _locked := false
+
+    float _pmh_val = _locked ? _pmh_lock : _pmh
+    float _pml_val = _locked ? _pml_lock : _pml
+
+    var float _open_price = na
+    if _sess_open
+        _open_price := open
+
+    float _ref_hi = na(_pmh_val) ? _open_price : _pmh_val
+    float _ref_lo = na(_pml_val) ? _open_price : _pml_val
+
+    var int _trend = 0
+    if _sess_open
+        _trend := 0
+    if not na(_ref_hi) and close > _ref_hi and _trend == 0
+        _trend := 1
+    if not na(_ref_lo) and close < _ref_lo and _trend == 0
+        _trend := -1
+
+    var float _dhi = na
+    var float _dlo = na
+    if _sess_open
+        _dhi := na
+        _dlo := na
+    if _is_reg
+        _dhi := na(_dhi) ? high : math.max(_dhi, high)
+        _dlo := na(_dlo) ? low  : math.min(_dlo, low)
+
+    float _dr = not na(_dhi) and not na(_dlo) ? _dhi - _dlo : na
+    float _rl = not na(_dr) and _dr > 0 ? _dhi - 0.40 * _dr : na
+    float _rs = not na(_dr) and _dr > 0 ? _dlo + 0.40 * _dr : na
+
+    var bool _sup_l = false
+    var bool _sup_s = false
+    if _sess_open
+        _sup_l := false
+        _sup_s := false
+    if _is_reg and not na(_rs) and _trend == -1 and high >= _rs
+        _sup_s := true
+    if _is_reg and not na(_rl) and _trend == 1  and low  <= _rl
+        _sup_l := true
+    if _is_reg and not na(_dlo[1]) and low  < _dlo[1]
+        _sup_s := false
+    if _is_reg and not na(_dhi[1]) and high > _dhi[1]
+        _sup_l := false
+
+    bool _pc_long  = _is_reg and _trend == 1  and high < high[1] and high > _ref_hi and not _in_last_hour and not _sup_l and barstate.isconfirmed
+    bool _pc_short = _is_reg and _trend == -1 and low  > low[1]  and low  < _ref_lo and not _in_last_hour and not _sup_s and barstate.isconfirmed
+    [_pc_long, _pc_short]
+
+// =============================================================================
 // SECURITY CALLS
 // =============================================================================
 sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
@@ -186,6 +265,11 @@ sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
 [sr0t, sr0b, sr1t, sr1b, sr2t, sr2b, sr3t, sr3b, sr4t, sr4b,
  sr5t, sr5b, sr6t, sr6b, sr7t, sr7b, sr8t, sr8b, sr9t, sr9b] =
      request.security(syminfo.tickerid, "60", get_sr_levels())
+
+// MTF PC states — runs the full PC logic on each timeframe independently
+[mtf_pc_long_2m,  mtf_pc_short_2m]  = request.security(syminfo.tickerid, "2",  get_pc_conditions())
+[mtf_pc_long_5m,  mtf_pc_short_5m]  = request.security(syminfo.tickerid, "5",  get_pc_conditions())
+[mtf_pc_long_10m, mtf_pc_short_10m] = request.security(syminfo.tickerid, "10", get_pc_conditions())
 
 // =============================================================================
 // MOVING AVERAGES
@@ -349,11 +433,11 @@ bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.
 
 bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1
      and high <  high[1] and high > ref_high
-     and not in_last_hour
+     and not in_last_hour and barstate.isconfirmed
 
 bool pc_short_valid = is_regular and valid_tf and trend_dir == -1
      and low  >  low[1]  and low  < ref_low
-     and not in_last_hour
+     and not in_last_hour and barstate.isconfirmed
 
 bool pc_long_done  = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
 bool pc_short_done = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
@@ -380,60 +464,85 @@ if is_regular and not na(day_high[1]) and high > day_high[1]
     suppress_long  := false
 
 float atr_val = ta.atr(14)
-float tri_h   = atr_val * 0.90
-float tri_gap = atr_val * 0.15
+float tri_h   = atr_val * 0.40
+float tri_gap = atr_val * 0.08
 
 bool warn_long  = not na(sma200_1h) and sma200_1h > high and sma200_1h - high <= warn_sma_dist
 bool warn_short = not na(sma200_1h) and sma200_1h < low  and low - sma200_1h  <= warn_sma_dist
 
-var polyline pc_poly = na
-var label    pc_warn = na
+// A+ = PC on 5min AND (PC on 2min OR PC on 10min) — visible on any chart TF
+bool aplus_long  = mtf_pc_long_5m  and (mtf_pc_long_2m  or mtf_pc_long_10m)
+bool aplus_short = mtf_pc_short_5m and (mtf_pc_short_2m or mtf_pc_short_10m)
+
+var polyline pc_poly      = na
+var label    pc_warn      = na
+var label    pc_aplus_lbl = na
 
 if session_open
     polyline.delete(pc_poly)
     label.delete(pc_warn)
-    pc_poly := na
-    pc_warn := na
+    label.delete(pc_aplus_lbl)
+    pc_poly      := na
+    pc_warn      := na
+    pc_aplus_lbl := na
 
 bool retrace_short_hit = trend_dir == -1 and suppress_short and not suppress_short[1]
 bool retrace_long_hit  = trend_dir == 1  and suppress_long  and not suppress_long[1]
 bool retrace_just_hit  = retrace_short_hit or retrace_long_hit
 
 if pc_long_done or pc_short_done or retrace_just_hit
-    pc_poly := na
-    pc_warn := na
+    polyline.delete(pc_poly)
+    label.delete(pc_warn)
+    label.delete(pc_aplus_lbl)
+    pc_poly      := na
+    pc_warn      := na
+    pc_aplus_lbl := na
 
 if show_pc and pc_long_valid and not suppress_long
     polyline.delete(pc_poly)
     label.delete(pc_warn)
-    pc_warn := na
+    label.delete(pc_aplus_lbl)
+    pc_warn      := na
+    pc_aplus_lbl := na
+    color tri_fill_long = aplus_long ? color.new(color.orange, 0) : color.new(color.green, 0)
+    color tri_line_long = warn_long  ? color.yellow : tri_fill_long
     pc_poly := polyline.new(
          array.from(
              chart.point.from_index(bar_index,     low - tri_gap),
              chart.point.from_index(bar_index - 1, low - tri_gap - tri_h),
              chart.point.from_index(bar_index + 1, low - tri_gap - tri_h)),
          closed=true,
-         fill_color=color.new(color.green, 0),
-         line_color=warn_long ? color.yellow : color.new(color.green, 0))
+         fill_color=tri_fill_long,
+         line_color=tri_line_long)
     if warn_long
-        pc_warn := label.new(bar_index, low - tri_gap - tri_h - (atr_val * 0.15), "!",
+        pc_warn := label.new(bar_index, low - tri_gap - tri_h - (atr_val * 0.08), "!",
              style=label.style_none, textcolor=color.yellow, size=size.huge)
+    if aplus_long
+        pc_aplus_lbl := label.new(bar_index, low - tri_gap - tri_h - (atr_val * 0.08), "A+",
+             style=label.style_none, textcolor=color.orange, size=size.normal)
 
 else if show_pc and pc_short_valid and not suppress_short
     polyline.delete(pc_poly)
     label.delete(pc_warn)
-    pc_warn := na
+    label.delete(pc_aplus_lbl)
+    pc_warn      := na
+    pc_aplus_lbl := na
+    color tri_fill_short = aplus_short ? color.new(color.orange, 0) : color.new(color.red, 0)
+    color tri_line_short = warn_short  ? color.yellow : tri_fill_short
     pc_poly := polyline.new(
          array.from(
              chart.point.from_index(bar_index,     high + tri_gap),
              chart.point.from_index(bar_index - 1, high + tri_gap + tri_h),
              chart.point.from_index(bar_index + 1, high + tri_gap + tri_h)),
          closed=true,
-         fill_color=color.new(color.red, 0),
-         line_color=warn_short ? color.yellow : color.new(color.red, 0))
+         fill_color=tri_fill_short,
+         line_color=tri_line_short)
     if warn_short
-        pc_warn := label.new(bar_index, high + tri_gap + tri_h + (atr_val * 0.15), "!",
+        pc_warn := label.new(bar_index, high + tri_gap + tri_h + (atr_val * 0.08), "!",
              style=label.style_none, textcolor=color.yellow, size=size.huge)
+    if aplus_short
+        pc_aplus_lbl := label.new(bar_index, high + tri_gap + tri_h + (atr_val * 0.08), "A+",
+             style=label.style_none, textcolor=color.orange, size=size.normal)
 
 // =============================================================================
 // SR CHANNELS — draw at session open, fixed for the day
