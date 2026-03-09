@@ -158,97 +158,107 @@ get_level(ind) =>
     ret
 
 // Dynamic level selection based on price vs PM zone
-bool has_pm      = not na(pmh_day) and not na(pml_day)
-bool above_pm    = has_pm and close > pmh_day
-bool below_pm    = has_pm and close < pml_day
+bool has_pm   = not na(pmh_day) and not na(pml_day)
+bool above_pm = has_pm and close > pmh_day
+bool below_pm = has_pm and close < pml_day
+int  n_above  = above_pm ? 3 : 2
+int  n_below  = below_pm ? 3 : 2
 
-// How many levels to show in each direction
-int n_above = above_pm ? 3 : 2
-int n_below = below_pm ? 3 : 2
+// Dirty flag: only re-sort and redraw when SR levels change or direction changes
+var bool levels_dirty  = true
+var int  prev_n_above  = -1
+var int  prev_n_below  = -1
 
-// Split all 10 SR levels into above/below price, excluding levels inside PM zone
+bool new_pivot = (bool(ph) or bool(pl)) and array.size(pivotvals) > 0
+if new_pivot or n_above != prev_n_above or n_below != prev_n_below
+    levels_dirty := true
+    prev_n_above := n_above
+    prev_n_below := n_below
+
 var above_tops = array.new_float(0)
 var above_bots = array.new_float(0)
 var below_tops = array.new_float(0)
 var below_bots = array.new_float(0)
+var sr_top     = array.new_line(10)
+var sr_bot     = array.new_line(10)
 
-array.clear(above_tops)
-array.clear(above_bots)
-array.clear(below_tops)
-array.clear(below_bots)
+if levels_dirty
+    // Classify levels into above / below price, skip PM zone levels
+    array.clear(above_tops)
+    array.clear(above_bots)
+    array.clear(below_tops)
+    array.clear(below_bots)
 
-for x = 0 to 9 by 1
-    float top_lvl = get_level(x * 2)
-    float bot_lvl = get_level(x * 2 + 1)
-    if not na(top_lvl) and not na(bot_lvl)
-        // Skip levels whose channel is entirely inside the PM zone
-        bool in_pm = has_pm and bot_lvl >= pml_day and top_lvl <= pmh_day
-        if not in_pm
-            float mid = (top_lvl + bot_lvl) / 2
-            if mid >= close
-                array.push(above_tops, top_lvl)
-                array.push(above_bots, bot_lvl)
-            else
-                array.push(below_tops, top_lvl)
-                array.push(below_bots, bot_lvl)
+    for x = 0 to 9 by 1
+        float top_lvl = get_level(x * 2)
+        float bot_lvl = get_level(x * 2 + 1)
+        if not na(top_lvl) and not na(bot_lvl)
+            bool in_pm = has_pm and bot_lvl >= pml_day and top_lvl <= pmh_day
+            if not in_pm
+                float mid = (top_lvl + bot_lvl) / 2
+                if mid >= close
+                    array.push(above_tops, top_lvl)
+                    array.push(above_bots, bot_lvl)
+                else
+                    array.push(below_tops, top_lvl)
+                    array.push(below_bots, bot_lvl)
 
-// Bubble-sort above levels ascending by bot (closest to price first)
-int above_sz = array.size(above_bots)
-if above_sz >= 2
-    for i = 0 to above_sz - 2 by 1
-        for j = 0 to above_sz - 2 - i by 1
-            if array.get(above_bots, j) > array.get(above_bots, j + 1)
-                float tmp_t = array.get(above_tops, j)
-                float tmp_b = array.get(above_bots, j)
-                array.set(above_tops, j, array.get(above_tops, j + 1))
-                array.set(above_bots, j, array.get(above_bots, j + 1))
-                array.set(above_tops, j + 1, tmp_t)
-                array.set(above_bots, j + 1, tmp_b)
+    // Bubble-sort above ascending by bot (closest first)
+    int above_sz = array.size(above_bots)
+    if above_sz >= 2
+        for i = 0 to above_sz - 2 by 1
+            for j = 0 to above_sz - 2 - i by 1
+                if array.get(above_bots, j) > array.get(above_bots, j + 1)
+                    float tmp_t = array.get(above_tops, j)
+                    float tmp_b = array.get(above_bots, j)
+                    array.set(above_tops, j, array.get(above_tops, j + 1))
+                    array.set(above_bots, j, array.get(above_bots, j + 1))
+                    array.set(above_tops, j + 1, tmp_t)
+                    array.set(above_bots, j + 1, tmp_b)
 
-// Bubble-sort below levels descending by top (closest to price first)
-int below_sz = array.size(below_tops)
-if below_sz >= 2
-    for i = 0 to below_sz - 2 by 1
-        for j = 0 to below_sz - 2 - i by 1
-            if array.get(below_tops, j) < array.get(below_tops, j + 1)
-                float tmp_t = array.get(below_tops, j)
-                float tmp_b = array.get(below_bots, j)
-                array.set(below_tops, j, array.get(below_tops, j + 1))
-                array.set(below_bots, j, array.get(below_bots, j + 1))
-                array.set(below_tops, j + 1, tmp_t)
-                array.set(below_bots, j + 1, tmp_b)
+    // Bubble-sort below descending by top (closest first)
+    int below_sz = array.size(below_tops)
+    if below_sz >= 2
+        for i = 0 to below_sz - 2 by 1
+            for j = 0 to below_sz - 2 - i by 1
+                if array.get(below_tops, j) < array.get(below_tops, j + 1)
+                    float tmp_t = array.get(below_tops, j)
+                    float tmp_b = array.get(below_bots, j)
+                    array.set(below_tops, j, array.get(below_tops, j + 1))
+                    array.set(below_bots, j, array.get(below_bots, j + 1))
+                    array.set(below_tops, j + 1, tmp_t)
+                    array.set(below_bots, j + 1, tmp_b)
 
-// Delete all existing lines and redraw
-var sr_top = array.new_line(10)
-var sr_bot = array.new_line(10)
+    // Delete old lines and redraw
+    for x = 0 to 9 by 1
+        line.delete(array.get(sr_top, x))
+        line.delete(array.get(sr_bot, x))
+        array.set(sr_top, x, na)
+        array.set(sr_bot, x, na)
 
-for x = 0 to 9 by 1
-    line.delete(array.get(sr_top, x))
-    line.delete(array.get(sr_bot, x))
-    array.set(sr_top, x, na)
-    array.set(sr_bot, x, na)
+    int slot       = 0
+    int draw_above = math.min(n_above, array.size(above_tops))
+    int draw_below = math.min(n_below, array.size(below_tops))
 
-int slot = 0
-int draw_above = math.min(n_above, array.size(above_tops))
-int draw_below = math.min(n_below, array.size(below_tops))
+    if draw_above > 0
+        for x = 0 to draw_above - 1 by 1
+            if slot < 10
+                array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index + 1, array.get(above_tops, x),
+                     extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+                array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index + 1, array.get(above_bots, x),
+                     extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+                slot += 1
 
-if draw_above > 0
-    for x = 0 to draw_above - 1 by 1
-        if slot < 10
-            array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index + 1, array.get(above_tops, x),
-                 extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
-            array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index + 1, array.get(above_bots, x),
-                 extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
-            slot += 1
+    if draw_below > 0
+        for x = 0 to draw_below - 1 by 1
+            if slot < 10
+                array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index + 1, array.get(below_tops, x),
+                     extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+                array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index + 1, array.get(below_bots, x),
+                     extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
+                slot += 1
 
-if draw_below > 0
-    for x = 0 to draw_below - 1 by 1
-        if slot < 10
-            array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index + 1, array.get(below_tops, x),
-                 extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
-            array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index + 1, array.get(below_bots, x),
-                 extend = extend.both, color = color.yellow, width = 1, style = line.style_solid))
-            slot += 1
+    levels_dirty := false
 
 // Alerts
 bool resistancebroken = false
