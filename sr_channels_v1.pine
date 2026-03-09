@@ -21,34 +21,12 @@ float prdhighest = request.security(syminfo.tickerid, '60', ta.highest(300))
 float prdlowest  = request.security(syminfo.tickerid, '60', ta.lowest(300))
 float cwidth     = (prdhighest - prdlowest) * ChannelW / 100
 
-// Pre-market high/low for current trading day
-int  et_hour      = hour(time, 'America/New_York')
-int  et_minute    = minute(time, 'America/New_York')
-bool is_regular   = session.ismarket
-bool session_open = is_regular and not is_regular[1]
-bool in_premarket = not is_regular and et_hour >= 4 and (et_hour < 9 or (et_hour == 9 and et_minute < 30))
-
-var float pm_build_h = na
-var float pm_build_l = na
-var float pmh_day    = na
-var float pml_day    = na
-
 // Fixed cutoff = 4:00 AM ET of today's actual calendar date
 // Computed from timenow so it never changes as historical bars are replayed
 int _cy = year(timenow, 'America/New_York')
 int _cm = month(timenow, 'America/New_York')
 int _cd = dayofmonth(timenow, 'America/New_York')
 int today_cutoff = timestamp('America/New_York', _cy, _cm, _cd, 4, 0)
-
-if session_open
-    pmh_day    := pm_build_h
-    pml_day    := pm_build_l
-    pm_build_h := na
-    pm_build_l := na
-
-if in_premarket
-    pm_build_h := na(pm_build_h) ? high : math.max(pm_build_h, high)
-    pm_build_l := na(pm_build_l) ? low  : math.min(pm_build_l, low)
 
 // Collect pivot values (cap at 100 for performance)
 // Exclude any pivot from the current trading day (on or after 4 AM ET today)
@@ -157,23 +135,15 @@ get_level(ind) =>
             ret := array.get(suportresistance, ind)
     ret
 
-// Dynamic level selection based on price vs PM zone
-bool has_pm   = not na(pmh_day) and not na(pml_day)
-bool above_pm = has_pm and close > pmh_day
-bool below_pm = has_pm and close < pml_day
-int  n_above  = above_pm ? 3 : 2
-int  n_below  = below_pm ? 3 : 2
+// Always show 3 levels above and 3 below current price
+int n_above = 3
+int n_below = 3
 
-// Dirty flag: only re-sort and redraw when SR levels change or direction changes
-var bool levels_dirty  = true
-var int  prev_n_above  = -1
-var int  prev_n_below  = -1
-
+// Dirty flag: only re-sort and redraw when SR levels change
+var bool levels_dirty = true
 bool new_pivot = (bool(ph) or bool(pl)) and array.size(pivotvals) > 0
-if new_pivot or n_above != prev_n_above or n_below != prev_n_below
+if new_pivot
     levels_dirty := true
-    prev_n_above := n_above
-    prev_n_below := n_below
 
 var above_tops = array.new_float(0)
 var above_bots = array.new_float(0)
@@ -193,15 +163,13 @@ if levels_dirty
         float top_lvl = get_level(x * 2)
         float bot_lvl = get_level(x * 2 + 1)
         if not na(top_lvl) and not na(bot_lvl)
-            bool in_pm = has_pm and bot_lvl >= pml_day and top_lvl <= pmh_day
-            if not in_pm
-                float mid = (top_lvl + bot_lvl) / 2
-                if mid >= close
-                    array.push(above_tops, top_lvl)
-                    array.push(above_bots, bot_lvl)
-                else
-                    array.push(below_tops, top_lvl)
-                    array.push(below_bots, bot_lvl)
+            float mid = (top_lvl + bot_lvl) / 2
+            if mid >= close
+                array.push(above_tops, top_lvl)
+                array.push(above_bots, bot_lvl)
+            else
+                array.push(below_tops, top_lvl)
+                array.push(below_bots, bot_lvl)
 
     // Bubble-sort above ascending by bot (closest first)
     int above_sz = array.size(above_bots)
