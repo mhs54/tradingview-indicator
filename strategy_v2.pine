@@ -1,0 +1,561 @@
+// =============================================================================
+// Day Trading Strategy Indicator - v2.0
+// Combines: Strategy (VWAP, SMAs, PM levels, ORB, Patience Candle)
+//         + SR Channels (hourly pivot-based support/resistance)
+// Strategy: Levels + Trend + Patience Candle
+// Timeframes: 2min (first 30m) | 5min (next 60m) | 10min (remainder)
+// =============================================================================
+//@version=6
+indicator("Day Trading Strategy v2", overlay=true, max_bars_back=501, max_lines_count=500, max_labels_count=500, max_polylines_count=100)
+
+// =============================================================================
+// INPUTS — MOVING AVERAGES
+// =============================================================================
+grp_sma = "Moving Averages"
+
+show_8        = input.bool(true,          "Show 8 SMA",          inline="8",   group=grp_sma)
+col_8         = input.color(color.blue,   "",                    inline="8",   group=grp_sma)
+width_8       = input.int(1, "",          minval=1, maxval=4,    inline="8",   group=grp_sma)
+
+show_21       = input.bool(true,          "Show 21 SMA",         inline="21",  group=grp_sma)
+col_21        = input.color(color.purple, "",                    inline="21",  group=grp_sma)
+width_21      = input.int(2, "",          minval=1, maxval=4,    inline="21",  group=grp_sma)
+
+show_200_5m   = input.bool(true,          "Show 5min 200 SMA",   inline="5m",  group=grp_sma)
+col_200_5m    = input.color(color.orange, "",                    inline="5m",  group=grp_sma)
+width_200_5m  = input.int(2, "",          minval=1, maxval=4,    inline="5m",  group=grp_sma)
+
+show_200_10m  = input.bool(true,          "Show 10min 200 SMA",  inline="10m", group=grp_sma)
+col_200_10m   = input.color(color.yellow, "",                    inline="10m", group=grp_sma)
+width_200_10m = input.int(2, "",          minval=1, maxval=4,    inline="10m", group=grp_sma)
+
+show_200_1h   = input.bool(true,          "Show Hourly 200 SMA", inline="1h",  group=grp_sma)
+col_200_1h    = input.color(color.red,    "",                    inline="1h",  group=grp_sma)
+width_200_1h  = input.int(2, "",          minval=1, maxval=4,    inline="1h",  group=grp_sma)
+
+// =============================================================================
+// INPUTS — VWAP
+// =============================================================================
+grp_vwap   = "VWAP"
+show_vwap  = input.bool(true,        "Show VWAP", inline="vwap", group=grp_vwap)
+col_vwap   = input.color(color.teal, "",          inline="vwap", group=grp_vwap)
+width_vwap = input.int(2, "",        minval=1, maxval=4, inline="vwap", group=grp_vwap)
+
+// =============================================================================
+// INPUTS — PRE-MARKET LEVELS
+// =============================================================================
+grp_pm  = "Pre-Market Levels"
+show_pm = input.bool(true,         "Show PMH / PML (last 5 days)", group=grp_pm)
+col_pm  = input.color(color.white, "Line color",                   group=grp_pm)
+
+// =============================================================================
+// INPUTS — OPENING RANGE
+// =============================================================================
+grp_or  = "Opening Range"
+show_or = input.bool(true, "Show Opening Range (9:30–9:45)", group=grp_or)
+
+// =============================================================================
+// INPUTS — PATIENCE CANDLE
+// =============================================================================
+grp_pc        = "Patience Candle"
+show_pc       = input.bool(true,  "Show Patience Candle Arrows",         group=grp_pc)
+warn_sma_dist = input.float(1.0,  "Hourly 200 SMA Warning Distance ($)", group=grp_pc, minval=0.1, step=0.25)
+
+// =============================================================================
+// INPUTS — SR CHANNELS
+// =============================================================================
+grp_sr        = "SR Channels"
+show_sr       = input.bool(true,  "Show SR Channels",          group=grp_sr)
+prd           = input.int(10,     "Pivot Period",               group=grp_sr, minval=4, maxval=30)
+ppsrc         = input.string("High/Low", "Source",              group=grp_sr, options=["High/Low", "Close/Open"])
+ChannelW      = input.int(5,      "Maximum Channel Width %",    group=grp_sr, minval=1, maxval=8)
+minstrength   = input.int(1,      "Minimum Strength",           group=grp_sr, minval=1)
+loopback_days = input.int(60,     "Loopback Period (Days)",     group=grp_sr, minval=5, maxval=365)
+
+// =============================================================================
+// MOVING AVERAGES
+// =============================================================================
+sma8       = ta.sma(close, 8)
+sma21      = ta.sma(close, 21)
+sma200_5m  = request.security(syminfo.tickerid, "5",  ta.sma(close, 200))
+sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
+sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
+
+plot(show_8       ? sma8       : na, "8 SMA",          color=col_8,        linewidth=width_8)
+plot(show_21      ? sma21      : na, "21 SMA",         color=col_21,       linewidth=width_21)
+plot(show_200_5m  ? sma200_5m  : na, "5min 200 SMA",   color=col_200_5m,   linewidth=width_200_5m)
+plot(show_200_10m ? sma200_10m : na, "10min 200 SMA",  color=col_200_10m,  linewidth=width_200_10m)
+plot(show_200_1h  ? sma200_1h  : na, "Hourly 200 SMA", color=col_200_1h,   linewidth=width_200_1h)
+
+// =============================================================================
+// VWAP
+// =============================================================================
+vwap_val = ta.vwap(hlc3)
+plot(show_vwap ? vwap_val : na, "VWAP", color=col_vwap, linewidth=width_vwap)
+
+// =============================================================================
+// SESSION DETECTION
+// =============================================================================
+bool is_premarket  = session.ispremarket
+bool is_regular    = session.ismarket
+bool session_open  = is_regular and not is_regular[1]
+bool session_close = not is_regular and is_regular[1]
+
+// =============================================================================
+// TIME OF DAY (ET)
+// =============================================================================
+int et_hour   = hour(time, "America/New_York")
+int et_minute = minute(time, "America/New_York")
+
+bool in_or        = is_regular and et_hour == 9 and et_minute < 45
+bool or_just_ended = is_regular and not in_or and in_or[1]
+bool in_last_hour  = is_regular and et_hour >= 15
+
+// =============================================================================
+// PRE-MARKET HIGH / LOW — last 5 trading days, scoped per day
+// =============================================================================
+var float pm_high        = na
+var float pm_low         = na
+var float pm_high_locked = na
+var float pm_low_locked  = na
+var bool  pm_locked      = false
+
+if session_open
+    pm_high_locked := pm_high
+    pm_low_locked  := pm_low
+    pm_high        := na
+    pm_low         := na
+    pm_locked      := true
+
+if is_premarket
+    pm_high   := na(pm_high) ? high : math.max(pm_high, high)
+    pm_low    := na(pm_low)  ? low  : math.min(pm_low,  low)
+    pm_locked := false
+
+float pmh = pm_locked ? pm_high_locked : pm_high
+float pml = pm_locked ? pm_low_locked  : pm_low
+
+var line[]  pmh_lines  = array.new<line>()
+var line[]  pml_lines  = array.new<line>()
+var label[] pmh_labels = array.new<label>()
+var label[] pml_labels = array.new<label>()
+var line    pmh_cur    = na
+var line    pml_cur    = na
+
+if show_pm and session_open and not na(pmh) and not na(pml)
+    pmh_cur := line.new(bar_index, pmh, bar_index + 1, pmh, color=col_pm, width=1, style=line.style_solid, extend=extend.right)
+    pml_cur := line.new(bar_index, pml, bar_index + 1, pml, color=col_pm, width=1, style=line.style_solid, extend=extend.right)
+    array.push(pmh_lines, pmh_cur)
+    array.push(pml_lines, pml_cur)
+    label lh = label.new(bar_index, pmh, "PMH " + str.tostring(pmh, "#.##"),
+         color=color.new(color.white, 100), textcolor=col_pm, size=size.small, style=label.style_label_right)
+    label ll = label.new(bar_index, pml, "PML " + str.tostring(pml, "#.##"),
+         color=color.new(color.white, 100), textcolor=col_pm, size=size.small, style=label.style_label_right)
+    array.push(pmh_labels, lh)
+    array.push(pml_labels, ll)
+    while array.size(pmh_lines) > 5
+        line.delete(array.shift(pmh_lines))
+        line.delete(array.shift(pml_lines))
+        label.delete(array.shift(pmh_labels))
+        label.delete(array.shift(pml_labels))
+
+if show_pm and session_close and not na(pmh_cur)
+    line.set_extend(pmh_cur, extend.none)
+    line.set_x2(pmh_cur, bar_index)
+if show_pm and session_close and not na(pml_cur)
+    line.set_extend(pml_cur, extend.none)
+    line.set_x2(pml_cur, bar_index)
+
+// =============================================================================
+// OPENING RANGE HIGH / LOW — drawn at 9:45, grows with each new candle
+// =============================================================================
+var float or_high      = na
+var float or_low       = na
+var line  or_high_line = na
+var line  or_low_line  = na
+
+if session_open
+    or_high      := na
+    or_low       := na
+    or_high_line := na
+    or_low_line  := na
+
+if in_or
+    or_high := na(or_high) ? high : math.max(or_high, high)
+    or_low  := na(or_low)  ? low  : math.min(or_low,  low)
+
+if show_or and or_just_ended and not na(or_high)
+    or_high_line := line.new(bar_index, or_high, bar_index, or_high, color=color.lime, width=2, style=line.style_solid)
+    or_low_line  := line.new(bar_index, or_low,  bar_index, or_low,  color=color.lime, width=2, style=line.style_solid)
+
+if show_or and is_regular and not in_or and not na(or_high_line)
+    line.set_x2(or_high_line, bar_index)
+    line.set_x2(or_low_line,  bar_index)
+
+// =============================================================================
+// TREND DIRECTION
+// =============================================================================
+var float sess_open_price = na
+if session_open
+    sess_open_price := open
+
+float ref_high = na(pmh) ? sess_open_price : pmh
+float ref_low  = na(pml) ? sess_open_price : pml
+
+bool above_ref = not na(ref_high) and close > ref_high
+bool below_ref = not na(ref_low)  and close < ref_low
+
+bool above_pm = not na(pmh) and close > pmh
+bool below_pm = not na(pml) and close < pml
+
+var int trend_dir = 0
+if session_open
+    trend_dir := 0
+if above_ref and trend_dir == 0
+    trend_dir := 1
+if below_ref and trend_dir == 0
+    trend_dir := -1
+
+// =============================================================================
+// SESSION HIGH / LOW (for 40% retracement filter)
+// =============================================================================
+var float day_high = na
+var float day_low  = na
+
+if session_open
+    day_high := na
+    day_low  := na
+
+if is_regular
+    day_high := na(day_high) ? high : math.max(day_high, high)
+    day_low  := na(day_low)  ? low  : math.min(day_low,  low)
+
+// =============================================================================
+// PATIENCE CANDLE DETECTION
+// =============================================================================
+bool valid_tf = timeframe.period == "2" or timeframe.period == "5" or timeframe.period == "10"
+
+bool pc_long_valid  = is_regular and valid_tf and trend_dir == 1
+     and high <  high[1] and high > ref_high
+     and not in_last_hour
+
+bool pc_short_valid = is_regular and valid_tf and trend_dir == -1
+     and low  >  low[1]  and low  < ref_low
+     and not in_last_hour
+
+bool pc_long_done  = is_regular and valid_tf and trend_dir == 1  and high >= high[1]
+bool pc_short_done = is_regular and valid_tf and trend_dir == -1 and low  <= low[1]
+
+float day_range     = not na(day_high) and not na(day_low) ? day_high - day_low : na
+float retrace_long  = not na(day_range) and day_range > 0 ? day_high - 0.40 * day_range : na
+float retrace_short = not na(day_range) and day_range > 0 ? day_low  + 0.40 * day_range : na
+
+var bool suppress_long  = false
+var bool suppress_short = false
+
+if session_open
+    suppress_long  := false
+    suppress_short := false
+
+if is_regular and not na(retrace_short) and trend_dir == -1 and high >= retrace_short
+    suppress_short := true
+if is_regular and not na(retrace_long)  and trend_dir == 1  and low  <= retrace_long
+    suppress_long  := true
+
+if is_regular and not na(day_low[1])  and low  < day_low[1]
+    suppress_short := false
+if is_regular and not na(day_high[1]) and high > day_high[1]
+    suppress_long  := false
+
+float atr_val = ta.atr(14)
+float tri_h   = atr_val * 0.90
+float tri_gap = atr_val * 0.15
+
+bool warn_long  = not na(sma200_1h) and sma200_1h > high and sma200_1h - high <= warn_sma_dist
+bool warn_short = not na(sma200_1h) and sma200_1h < low  and low - sma200_1h  <= warn_sma_dist
+
+var polyline pc_poly = na
+var label    pc_warn = na
+
+if session_open
+    polyline.delete(pc_poly)
+    label.delete(pc_warn)
+    pc_poly := na
+    pc_warn := na
+
+bool retrace_short_hit = trend_dir == -1 and suppress_short and not suppress_short[1]
+bool retrace_long_hit  = trend_dir == 1  and suppress_long  and not suppress_long[1]
+bool retrace_just_hit  = retrace_short_hit or retrace_long_hit
+
+if pc_long_done or pc_short_done or retrace_just_hit
+    pc_poly := na
+    pc_warn := na
+
+if show_pc and pc_long_valid and not suppress_long
+    polyline.delete(pc_poly)
+    label.delete(pc_warn)
+    pc_warn := na
+    pc_poly := polyline.new(
+         array.from(
+             chart.point.from_index(bar_index,     low - tri_gap),
+             chart.point.from_index(bar_index - 1, low - tri_gap - tri_h),
+             chart.point.from_index(bar_index + 1, low - tri_gap - tri_h)),
+         closed=true,
+         fill_color=color.new(color.green, 0),
+         line_color=warn_long ? color.yellow : color.new(color.green, 0))
+    if warn_long
+        pc_warn := label.new(bar_index, low - tri_gap - tri_h - (atr_val * 0.15), "!",
+             style=label.style_none, textcolor=color.yellow, size=size.huge)
+
+else if show_pc and pc_short_valid and not suppress_short
+    polyline.delete(pc_poly)
+    label.delete(pc_warn)
+    pc_warn := na
+    pc_poly := polyline.new(
+         array.from(
+             chart.point.from_index(bar_index,     high + tri_gap),
+             chart.point.from_index(bar_index - 1, high + tri_gap + tri_h),
+             chart.point.from_index(bar_index + 1, high + tri_gap + tri_h)),
+         closed=true,
+         fill_color=color.new(color.red, 0),
+         line_color=warn_short ? color.yellow : color.new(color.red, 0))
+    if warn_short
+        pc_warn := label.new(bar_index, high + tri_gap + tri_h + (atr_val * 0.15), "!",
+             style=label.style_none, textcolor=color.yellow, size=size.huge)
+
+// =============================================================================
+// SR CHANNELS — hourly pivots, prior days only
+// =============================================================================
+float sr_src1    = ppsrc == "High/Low" ? high : math.max(close, open)
+float sr_src2    = ppsrc == "High/Low" ? low  : math.min(close, open)
+
+float ph         = request.security(syminfo.tickerid, "60", ta.pivothigh(sr_src1, prd, prd))
+float pl         = request.security(syminfo.tickerid, "60", ta.pivotlow(sr_src2,  prd, prd))
+float prdhighest = request.security(syminfo.tickerid, "60", ta.highest(300))
+float prdlowest  = request.security(syminfo.tickerid, "60", ta.lowest(300))
+float cwidth     = (prdhighest - prdlowest) * ChannelW / 100
+
+// Only use pivots from prior days (not current trading day)
+int _cy          = year(timenow,  "America/New_York")
+int _cm          = month(timenow, "America/New_York")
+int _cd          = dayofmonth(timenow, "America/New_York")
+int today_cutoff = timestamp("America/New_York", _cy, _cm, _cd, 4, 0)
+
+var pivotvals = array.new_float(0)
+var pivotlocs = array.new_float(0)
+
+if (bool(ph) or bool(pl)) and time < today_cutoff
+    array.unshift(pivotvals, bool(ph) ? ph : pl)
+    array.unshift(pivotlocs, time)
+    int sz = array.size(pivotvals)
+    while sz > 0
+        if time - array.get(pivotlocs, sz - 1) > loopback_days * 86400000
+            array.pop(pivotvals)
+            array.pop(pivotlocs)
+            sz -= 1
+        else
+            break
+    while array.size(pivotvals) > 100
+        array.pop(pivotvals)
+        array.pop(pivotlocs)
+
+get_sr_vals(ind) =>
+    float lo = array.get(pivotvals, ind)
+    float hi = lo
+    int numpp = 0
+    for y = 0 to array.size(pivotvals) - 1 by 1
+        float cpp = array.get(pivotvals, y)
+        float wdth = cpp <= hi ? hi - cpp : cpp - lo
+        if wdth <= cwidth
+            if cpp <= hi
+                lo := math.min(lo, cpp)
+            else
+                hi := math.max(hi, cpp)
+            numpp := numpp + 20
+    [hi, lo, numpp]
+
+var suportresistance = array.new_float(20, 0)
+
+changeit(x, y) =>
+    tmp = array.get(suportresistance, y * 2)
+    array.set(suportresistance, y * 2, array.get(suportresistance, x * 2))
+    array.set(suportresistance, x * 2, tmp)
+    tmp := array.get(suportresistance, y * 2 + 1)
+    array.set(suportresistance, y * 2 + 1, array.get(suportresistance, x * 2 + 1))
+    array.set(suportresistance, x * 2 + 1, tmp)
+
+if (bool(ph) or bool(pl)) and array.size(pivotvals) > 0
+    supres = array.new_float(0)
+    stren  = array.new_float(10, 0)
+    int npv = array.size(pivotvals)
+
+    for x = 0 to npv - 1 by 1
+        [hi, lo, strength] = get_sr_vals(x)
+        array.push(supres, strength)
+        array.push(supres, hi)
+        array.push(supres, lo)
+
+    for x = 0 to npv - 1 by 1
+        float h = array.get(supres, x * 3 + 1)
+        float l = array.get(supres, x * 3 + 2)
+        int s = 0
+        for y = 0 to math.min(100, bar_index) by 1
+            if high[y] <= h and high[y] >= l or low[y] <= h and low[y] >= l
+                s := s + 1
+        array.set(supres, x * 3, array.get(supres, x * 3) + s)
+
+    array.fill(suportresistance, 0)
+    int src = 0
+    for x = 0 to npv - 1 by 1
+        float stv = -1.
+        int stl = -1
+        for y = 0 to npv - 1 by 1
+            if array.get(supres, y * 3) > stv and array.get(supres, y * 3) >= minstrength * 20
+                stv := array.get(supres, y * 3)
+                stl := y
+        if stl >= 0
+            float hh = array.get(supres, stl * 3 + 1)
+            float ll = array.get(supres, stl * 3 + 2)
+            array.set(suportresistance, src * 2,     hh)
+            array.set(suportresistance, src * 2 + 1, ll)
+            array.set(stren, src, array.get(supres, stl * 3))
+            for y = 0 to npv - 1 by 1
+                if array.get(supres, y * 3 + 1) <= hh and array.get(supres, y * 3 + 1) >= ll or array.get(supres, y * 3 + 2) <= hh and array.get(supres, y * 3 + 2) >= ll
+                    array.set(supres, y * 3, -1)
+            src += 1
+            if src >= 10
+                break
+
+    for x = 0 to 8 by 1
+        for y = x + 1 to 9 by 1
+            if array.get(stren, y) > array.get(stren, x)
+                float tmp = array.get(stren, y)
+                array.set(stren, y, array.get(stren, x))
+                array.set(stren, x, tmp)
+                changeit(x, y)
+
+get_level(ind) =>
+    float ret = na
+    if ind < array.size(suportresistance)
+        if array.get(suportresistance, ind) != 0
+            ret := array.get(suportresistance, ind)
+    ret
+
+// Draw 3 closest SR levels above and below price (dirty flag — only on new pivot)
+var bool levels_dirty = true
+if (bool(ph) or bool(pl)) and array.size(pivotvals) > 0
+    levels_dirty := true
+
+var above_tops = array.new_float(0)
+var above_bots = array.new_float(0)
+var below_tops = array.new_float(0)
+var below_bots = array.new_float(0)
+var sr_top     = array.new_line(10)
+var sr_bot     = array.new_line(10)
+
+if show_sr and levels_dirty
+    array.clear(above_tops)
+    array.clear(above_bots)
+    array.clear(below_tops)
+    array.clear(below_bots)
+
+    for x = 0 to 9 by 1
+        float top_lvl = get_level(x * 2)
+        float bot_lvl = get_level(x * 2 + 1)
+        if not na(top_lvl) and not na(bot_lvl)
+            float mid = (top_lvl + bot_lvl) / 2
+            if mid >= close
+                array.push(above_tops, top_lvl)
+                array.push(above_bots, bot_lvl)
+            else
+                array.push(below_tops, top_lvl)
+                array.push(below_bots, bot_lvl)
+
+    int above_sz = array.size(above_bots)
+    if above_sz >= 2
+        for i = 0 to above_sz - 2 by 1
+            for j = 0 to above_sz - 2 - i by 1
+                if array.get(above_bots, j) > array.get(above_bots, j + 1)
+                    float tmp_t = array.get(above_tops, j)
+                    float tmp_b = array.get(above_bots, j)
+                    array.set(above_tops, j, array.get(above_tops, j + 1))
+                    array.set(above_bots, j, array.get(above_bots, j + 1))
+                    array.set(above_tops, j + 1, tmp_t)
+                    array.set(above_bots, j + 1, tmp_b)
+
+    int below_sz = array.size(below_tops)
+    if below_sz >= 2
+        for i = 0 to below_sz - 2 by 1
+            for j = 0 to below_sz - 2 - i by 1
+                if array.get(below_tops, j) < array.get(below_tops, j + 1)
+                    float tmp_t = array.get(below_tops, j)
+                    float tmp_b = array.get(below_bots, j)
+                    array.set(below_tops, j, array.get(below_tops, j + 1))
+                    array.set(below_bots, j, array.get(below_bots, j + 1))
+                    array.set(below_tops, j + 1, tmp_t)
+                    array.set(below_bots, j + 1, tmp_b)
+
+    for x = 0 to 9 by 1
+        line.delete(array.get(sr_top, x))
+        line.delete(array.get(sr_bot, x))
+        array.set(sr_top, x, na)
+        array.set(sr_bot, x, na)
+
+    int slot       = 0
+    int draw_above = math.min(3, array.size(above_tops))
+    int draw_below = math.min(3, array.size(below_tops))
+
+    if draw_above > 0
+        for x = 0 to draw_above - 1 by 1
+            if slot < 10
+                array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index + 1, array.get(above_tops, x),
+                     extend=extend.both, color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index + 1, array.get(above_bots, x),
+                     extend=extend.both, color=color.yellow, width=1, style=line.style_solid))
+                slot += 1
+
+    if draw_below > 0
+        for x = 0 to draw_below - 1 by 1
+            if slot < 10
+                array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index + 1, array.get(below_tops, x),
+                     extend=extend.both, color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index + 1, array.get(below_bots, x),
+                     extend=extend.both, color=color.yellow, width=1, style=line.style_solid))
+                slot += 1
+
+    levels_dirty := false
+
+// =============================================================================
+// ALERTS
+// =============================================================================
+alertcondition(pc_long_valid  and not pc_long_valid[1],
+     "Patience Candle - LONG",
+     "Long patience candle. Entry above PC high, stop below PC low.")
+
+alertcondition(pc_short_valid and not pc_short_valid[1],
+     "Patience Candle - SHORT",
+     "Short patience candle. Entry below PC low, stop above PC high.")
+
+alertcondition(above_pm and not above_pm[1],
+     "PM Breakout - LONG",  "Price broke above pre-market high.")
+
+alertcondition(below_pm and not below_pm[1],
+     "PM Breakout - SHORT", "Price broke below pre-market low.")
+
+bool sr_resistance_broken = false
+bool sr_support_broken    = false
+bool sr_not_in_channel    = true
+
+for x = 0 to 9 by 1
+    if close <= array.get(suportresistance, x * 2) and close >= array.get(suportresistance, x * 2 + 1)
+        sr_not_in_channel := false
+
+if sr_not_in_channel
+    for x = 0 to 9 by 1
+        if close[1] <= array.get(suportresistance, x * 2) and close > array.get(suportresistance, x * 2)
+            sr_resistance_broken := true
+        if close[1] >= array.get(suportresistance, x * 2 + 1) and close < array.get(suportresistance, x * 2 + 1)
+            sr_support_broken := true
+
+alertcondition(sr_resistance_broken, title="SR Resistance Broken", message="SR Resistance Broken")
+alertcondition(sr_support_broken,    title="SR Support Broken",    message="SR Support Broken")
