@@ -519,27 +519,29 @@ if show_sr and lines_dirty and is_regular
     if draw_above > 0
         for x = 0 to draw_above - 1 by 1
             if slot < 10
-                array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index, array.get(above_tops, x),
-                     color=color.yellow, width=1, style=line.style_solid))
-                array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index, array.get(above_bots, x),
-                     color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index + 1, array.get(above_tops, x),
+                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index + 1, array.get(above_bots, x),
+                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
                 slot += 1
 
     if draw_below > 0
         for x = 0 to draw_below - 1 by 1
             if slot < 10
-                array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index, array.get(below_tops, x),
-                     color=color.yellow, width=1, style=line.style_solid))
-                array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index, array.get(below_bots, x),
-                     color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index + 1, array.get(below_tops, x),
+                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
+                array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index + 1, array.get(below_bots, x),
+                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
                 slot += 1
 
     lines_dirty := false
 
-// Step 3 — extend SR lines rightward each regular session bar
-if show_sr and is_regular
+// Cap SR lines at session close so they don't bleed into next day's pre-market
+if show_sr and session_close
     for x = 0 to 9 by 1
         if not na(array.get(sr_top, x))
+            line.set_extend(array.get(sr_top, x), extend.none)
+            line.set_extend(array.get(sr_bot, x), extend.none)
             line.set_x2(array.get(sr_top, x), bar_index)
             line.set_x2(array.get(sr_bot, x), bar_index)
 
