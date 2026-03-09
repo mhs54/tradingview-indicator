@@ -65,34 +65,133 @@ warn_sma_dist = input.float(1.0,  "Hourly 200 SMA Warning Distance ($)", group=g
 // INPUTS — SR CHANNELS
 // =============================================================================
 grp_sr        = "SR Channels"
-show_sr       = input.bool(true,  "Show SR Channels",          group=grp_sr)
-prd           = input.int(10,     "Pivot Period",               group=grp_sr, minval=4, maxval=30)
-ppsrc         = input.string("High/Low", "Source",              group=grp_sr, options=["High/Low", "Close/Open"])
-ChannelW      = input.int(5,      "Maximum Channel Width %",    group=grp_sr, minval=1, maxval=8)
-minstrength   = input.int(1,      "Minimum Strength",           group=grp_sr, minval=1)
-loopback_days = input.int(60,     "Loopback Period (Days)",     group=grp_sr, minval=5, maxval=365)
+show_sr       = input.bool(true,  "Show SR Channels",        group=grp_sr)
+prd           = input.int(10,     "Pivot Period",             group=grp_sr, minval=4, maxval=30)
+ppsrc         = input.string("High/Low", "Source",            group=grp_sr, options=["High/Low", "Close/Open"])
+ChannelW      = input.int(5,      "Maximum Channel Width %",  group=grp_sr, minval=1, maxval=8)
+minstrength   = input.int(1,      "Minimum Strength",         group=grp_sr, minval=1)
+loopback_days = input.int(60,     "Loopback Period (Days)",   group=grp_sr, minval=5, maxval=365)
 
 // =============================================================================
-// SECURITY CALLS — all hourly calls combined into one to minimise context switches
+// SR LEVELS FUNCTION — runs entirely inside request.security("60", ...)
+// This means the heavy clustering loop only executes when an HOURLY BAR CLOSES,
+// never on intraday display bars. The returned scalars are identical on every
+// display timeframe (2m, 5m, 10m, etc.) because the computation lives on the
+// 1H chart, not on the display chart.
+//
+// Returns 20 scalars: 10 levels × (top, bottom).
 // =============================================================================
-float _sr_src1 = ppsrc == "High/Low" ? high : math.max(close, open)
-float _sr_src2 = ppsrc == "High/Low" ? low  : math.min(close, open)
+get_sr_levels() =>
+    float _src1  = ppsrc == "High/Low" ? high : math.max(close, open)
+    float _src2  = ppsrc == "High/Low" ? low  : math.min(close, open)
+    float ph_val = ta.pivothigh(_src1, prd, prd)
+    float pl_val = ta.pivotlow(_src2,  prd, prd)
+    float cw     = (ta.highest(300) - ta.lowest(300)) * ChannelW / 100
 
-[sma200_1h, ph, pl, prdhighest, prdlowest] = request.security(
-     syminfo.tickerid, "60",
-     [ta.sma(close, 200),
-      ta.pivothigh(_sr_src1, prd, prd),
-      ta.pivotlow(_sr_src2,  prd, prd),
-      ta.highest(300),
-      ta.lowest(300)])
+    // Exclude pivots from the current trading day (on or after 4 AM ET today)
+    int cutoff = timestamp("America/New_York",
+         year(timenow,       "America/New_York"),
+         month(timenow,      "America/New_York"),
+         dayofmonth(timenow, "America/New_York"), 4, 0)
+
+    // var inside a function called via request.security persists across
+    // hourly bars — this is how pivot history accumulates on the 1H chart
+    var float[] pv = array.new_float(0)
+    var float[] pt = array.new_float(0)
+
+    if (bool(ph_val) or bool(pl_val)) and time < cutoff
+        array.unshift(pv, bool(ph_val) ? ph_val : pl_val)
+        array.unshift(pt, float(time))
+        int sz = array.size(pv)
+        while sz > 0
+            if float(time) - array.get(pt, sz - 1) > loopback_days * 86400000
+                array.pop(pv)
+                array.pop(pt)
+                sz -= 1
+            else
+                break
+        while array.size(pv) > 100
+            array.pop(pv)
+            array.pop(pt)
+
+    int npv = array.size(pv)
+
+    // sr holds the top 10 clustered SR levels (top/bot pairs) — persists between hourly bars
+    var float[] sr = array.new_float(20, 0.0)
+
+    if npv > 0
+        // Build a flat array: [strength, hi, lo] × npv
+        float[] supres = array.new_float(0)
+        for x = 0 to npv - 1
+            float lo  = array.get(pv, x)
+            float hi  = lo
+            int numpp = 0
+            for y = 0 to npv - 1
+                float cpp  = array.get(pv, y)
+                float wdth = cpp <= hi ? hi - cpp : cpp - lo
+                if wdth <= cw
+                    if cpp <= hi
+                        lo := math.min(lo, cpp)
+                    else
+                        hi := math.max(hi, cpp)
+                    numpp += 20
+            array.push(supres, float(numpp))
+            array.push(supres, hi)
+            array.push(supres, lo)
+
+        // Greedily pick the 10 strongest non-overlapping levels
+        array.fill(sr, 0.0)
+        int src = 0
+        for x = 0 to npv - 1
+            float stv = -1.0
+            int   stl = -1
+            for y = 0 to npv - 1
+                if array.get(supres, y * 3) > stv and array.get(supres, y * 3) >= float(minstrength * 20)
+                    stv := array.get(supres, y * 3)
+                    stl := y
+            if stl >= 0
+                float hh = array.get(supres, stl * 3 + 1)
+                float ll = array.get(supres, stl * 3 + 2)
+                array.set(sr, src * 2,     hh)
+                array.set(sr, src * 2 + 1, ll)
+                for y = 0 to npv - 1
+                    float yt = array.get(supres, y * 3 + 1)
+                    float yb = array.get(supres, y * 3 + 2)
+                    if (yt <= hh and yt >= ll) or (yb <= hh and yb >= ll)
+                        array.set(supres, y * 3, -1.0)
+                src += 1
+                if src >= 10
+                    break
+
+    // Pine Script cannot return arrays from request.security — return 20 scalars
+    [array.get(sr,  0), array.get(sr,  1),
+     array.get(sr,  2), array.get(sr,  3),
+     array.get(sr,  4), array.get(sr,  5),
+     array.get(sr,  6), array.get(sr,  7),
+     array.get(sr,  8), array.get(sr,  9),
+     array.get(sr, 10), array.get(sr, 11),
+     array.get(sr, 12), array.get(sr, 13),
+     array.get(sr, 14), array.get(sr, 15),
+     array.get(sr, 16), array.get(sr, 17),
+     array.get(sr, 18), array.get(sr, 19)]
+
+// =============================================================================
+// SECURITY CALLS
+// =============================================================================
+sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
+sma200_5m  = request.security(syminfo.tickerid, "5",  ta.sma(close, 200))
+sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
+
+// All SR computation lives on the 1H chart via get_sr_levels()
+[sr0t, sr0b, sr1t, sr1b, sr2t, sr2b, sr3t, sr3b, sr4t, sr4b,
+ sr5t, sr5b, sr6t, sr6b, sr7t, sr7b, sr8t, sr8b, sr9t, sr9b] =
+     request.security(syminfo.tickerid, "60", get_sr_levels())
 
 // =============================================================================
 // MOVING AVERAGES
 // =============================================================================
-sma8       = ta.sma(close, 8)
-sma21      = ta.sma(close, 21)
-sma200_5m  = request.security(syminfo.tickerid, "5",  ta.sma(close, 200))
-sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
+sma8  = ta.sma(close, 8)
+sma21 = ta.sma(close, 21)
 
 plot(show_8       ? sma8       : na, "8 SMA",          color=col_8,        linewidth=width_8)
 plot(show_21      ? sma21      : na, "21 SMA",         color=col_21,       linewidth=width_21)
@@ -120,7 +219,7 @@ bool session_close = not is_regular and is_regular[1]
 int et_hour   = hour(time, "America/New_York")
 int et_minute = minute(time, "America/New_York")
 
-bool in_or        = is_regular and et_hour == 9 and et_minute < 45
+bool in_or         = is_regular and et_hour == 9 and et_minute < 45
 bool or_just_ended = is_regular and not in_or and in_or[1]
 bool in_last_hour  = is_regular and et_hour >= 15
 
@@ -337,200 +436,99 @@ else if show_pc and pc_short_valid and not suppress_short
              style=label.style_none, textcolor=color.yellow, size=size.huge)
 
 // =============================================================================
-// SR CHANNELS — hourly pivots, prior days only
-// (ph, pl, prdhighest, prdlowest fetched above in combined hourly security call)
+// SR CHANNELS — draw at session open, fixed for the day
+// sr0t..sr9t / sr0b..sr9b are the 10 level tops/bottoms from the 1H chart.
+// Classify above/below using the session open price — identical on all TFs.
 // =============================================================================
-float cwidth = (prdhighest - prdlowest) * ChannelW / 100
+var line[] sr_top = array.new_line(10)
+var line[] sr_bot = array.new_line(10)
 
-// Only use pivots from prior days (not current trading day)
-int _cy          = year(timenow,  "America/New_York")
-int _cm          = month(timenow, "America/New_York")
-int _cd          = dayofmonth(timenow, "America/New_York")
-int today_cutoff = timestamp("America/New_York", _cy, _cm, _cd, 4, 0)
-
-var pivotvals = array.new_float(0)
-var pivotlocs = array.new_float(0)
-
-if (bool(ph) or bool(pl)) and time < today_cutoff
-    array.unshift(pivotvals, bool(ph) ? ph : pl)
-    array.unshift(pivotlocs, time)
-    int sz = array.size(pivotvals)
-    while sz > 0
-        if time - array.get(pivotlocs, sz - 1) > loopback_days * 86400000
-            array.pop(pivotvals)
-            array.pop(pivotlocs)
-            sz -= 1
-        else
-            break
-    while array.size(pivotvals) > 100
-        array.pop(pivotvals)
-        array.pop(pivotlocs)
-
-get_sr_vals(ind) =>
-    float lo = array.get(pivotvals, ind)
-    float hi = lo
-    int numpp = 0
-    for y = 0 to array.size(pivotvals) - 1 by 1
-        float cpp = array.get(pivotvals, y)
-        float wdth = cpp <= hi ? hi - cpp : cpp - lo
-        if wdth <= cwidth
-            if cpp <= hi
-                lo := math.min(lo, cpp)
-            else
-                hi := math.max(hi, cpp)
-            numpp := numpp + 20
-    [hi, lo, numpp]
-
-var suportresistance = array.new_float(20, 0)
-
-changeit(x, y) =>
-    tmp = array.get(suportresistance, y * 2)
-    array.set(suportresistance, y * 2, array.get(suportresistance, x * 2))
-    array.set(suportresistance, x * 2, tmp)
-    tmp := array.get(suportresistance, y * 2 + 1)
-    array.set(suportresistance, y * 2 + 1, array.get(suportresistance, x * 2 + 1))
-    array.set(suportresistance, x * 2 + 1, tmp)
-
-if (bool(ph) or bool(pl)) and array.size(pivotvals) > 0
-    supres = array.new_float(0)
-    stren  = array.new_float(10, 0)
-    int npv = array.size(pivotvals)
-
-    for x = 0 to npv - 1 by 1
-        [hi, lo, strength] = get_sr_vals(x)
-        array.push(supres, strength)
-        array.push(supres, hi)
-        array.push(supres, lo)
-
-    array.fill(suportresistance, 0)
-    int src = 0
-    for x = 0 to npv - 1 by 1
-        float stv = -1.
-        int stl = -1
-        for y = 0 to npv - 1 by 1
-            if array.get(supres, y * 3) > stv and array.get(supres, y * 3) >= minstrength * 20
-                stv := array.get(supres, y * 3)
-                stl := y
-        if stl >= 0
-            float hh = array.get(supres, stl * 3 + 1)
-            float ll = array.get(supres, stl * 3 + 2)
-            array.set(suportresistance, src * 2,     hh)
-            array.set(suportresistance, src * 2 + 1, ll)
-            array.set(stren, src, array.get(supres, stl * 3))
-            for y = 0 to npv - 1 by 1
-                if array.get(supres, y * 3 + 1) <= hh and array.get(supres, y * 3 + 1) >= ll or array.get(supres, y * 3 + 2) <= hh and array.get(supres, y * 3 + 2) >= ll
-                    array.set(supres, y * 3, -1)
-            src += 1
-            if src >= 10
-                break
-
-    for x = 0 to 8 by 1
-        for y = x + 1 to 9 by 1
-            if array.get(stren, y) > array.get(stren, x)
-                float tmp = array.get(stren, y)
-                array.set(stren, y, array.get(stren, x))
-                array.set(stren, x, tmp)
-                changeit(x, y)
-
-get_level(ind) =>
-    float ret = na
-    if ind < array.size(suportresistance)
-        if array.get(suportresistance, ind) != 0
-            ret := array.get(suportresistance, ind)
-    ret
-
-var above_tops = array.new_float(0)
-var above_bots = array.new_float(0)
-var below_tops = array.new_float(0)
-var below_bots = array.new_float(0)
-var sr_top     = array.new_line(10)
-var sr_bot     = array.new_line(10)
-
-// Draw SR lines ONCE at session open — fixed for the entire day.
-// Classify using open price so levels are identical on all timeframes.
-// x1 anchored far left so the line visually shows its historical origin.
 if show_sr and session_open
     // Delete prior day's lines
-    for x = 0 to 9 by 1
+    for x = 0 to 9
         line.delete(array.get(sr_top, x))
         line.delete(array.get(sr_bot, x))
         array.set(sr_top, x, na)
         array.set(sr_bot, x, na)
 
-    array.clear(above_tops)
-    array.clear(above_bots)
-    array.clear(below_tops)
-    array.clear(below_bots)
+    // Pack the 20 scalars back into arrays for sorting/filtering
+    float[] all_t = array.from(sr0t, sr1t, sr2t, sr3t, sr4t, sr5t, sr6t, sr7t, sr8t, sr9t)
+    float[] all_b = array.from(sr0b, sr1b, sr2b, sr3b, sr4b, sr5b, sr6b, sr7b, sr8b, sr9b)
+
+    float[] above_t = array.new_float(0)
+    float[] above_b = array.new_float(0)
+    float[] below_t = array.new_float(0)
+    float[] below_b = array.new_float(0)
 
     bool has_pm = not na(pmh) and not na(pml)
-    for x = 0 to 9 by 1
-        float top_lvl = get_level(x * 2)
-        float bot_lvl = get_level(x * 2 + 1)
-        if not na(top_lvl) and not na(bot_lvl)
-            bool in_pm_zone = has_pm and bot_lvl >= pml and top_lvl <= pmh
-            if not in_pm_zone
-                float mid = (top_lvl + bot_lvl) / 2
-                // Use open (session open price), not close — avoids timeframe-dependent classification
-                if mid >= open
-                    array.push(above_tops, top_lvl)
-                    array.push(above_bots, bot_lvl)
-                else
-                    array.push(below_tops, top_lvl)
-                    array.push(below_bots, bot_lvl)
 
-    // Sort above ascending by bot (closest above first)
-    int above_sz = array.size(above_bots)
-    if above_sz >= 2
-        for i = 0 to above_sz - 2 by 1
-            for j = 0 to above_sz - 2 - i by 1
-                if array.get(above_bots, j) > array.get(above_bots, j + 1)
-                    float tmp_t = array.get(above_tops, j)
-                    float tmp_b = array.get(above_bots, j)
-                    array.set(above_tops, j, array.get(above_tops, j + 1))
-                    array.set(above_bots, j, array.get(above_bots, j + 1))
-                    array.set(above_tops, j + 1, tmp_t)
-                    array.set(above_bots, j + 1, tmp_b)
+    for x = 0 to 9
+        float t = array.get(all_t, x)
+        float b = array.get(all_b, x)
+        if t != 0.0 and b != 0.0
+            bool in_pm = has_pm and b >= pml and t <= pmh
+            if not in_pm
+                float mid = (t + b) / 2
+                if mid >= open
+                    array.push(above_t, t)
+                    array.push(above_b, b)
+                else
+                    array.push(below_t, t)
+                    array.push(below_b, b)
+
+    // Sort above ascending by bottom (closest above first)
+    int asiz = array.size(above_b)
+    if asiz >= 2
+        for i = 0 to asiz - 2
+            for j = 0 to asiz - 2 - i
+                if array.get(above_b, j) > array.get(above_b, j + 1)
+                    float tt = array.get(above_t, j)
+                    float tb = array.get(above_b, j)
+                    array.set(above_t, j, array.get(above_t, j + 1))
+                    array.set(above_b, j, array.get(above_b, j + 1))
+                    array.set(above_t, j + 1, tt)
+                    array.set(above_b, j + 1, tb)
 
     // Sort below descending by top (closest below first)
-    int below_sz = array.size(below_tops)
-    if below_sz >= 2
-        for i = 0 to below_sz - 2 by 1
-            for j = 0 to below_sz - 2 - i by 1
-                if array.get(below_tops, j) < array.get(below_tops, j + 1)
-                    float tmp_t = array.get(below_tops, j)
-                    float tmp_b = array.get(below_bots, j)
-                    array.set(below_tops, j, array.get(below_tops, j + 1))
-                    array.set(below_bots, j, array.get(below_bots, j + 1))
-                    array.set(below_tops, j + 1, tmp_t)
-                    array.set(below_bots, j + 1, tmp_b)
+    int bsiz = array.size(below_b)
+    if bsiz >= 2
+        for i = 0 to bsiz - 2
+            for j = 0 to bsiz - 2 - i
+                if array.get(below_t, j) < array.get(below_t, j + 1)
+                    float tt = array.get(below_t, j)
+                    float tb = array.get(below_b, j)
+                    array.set(below_t, j, array.get(below_t, j + 1))
+                    array.set(below_b, j, array.get(below_b, j + 1))
+                    array.set(below_t, j + 1, tt)
+                    array.set(below_b, j + 1, tb)
 
-    // Anchor left endpoint far into history so origin is visible on chart
-    int hist_x     = math.max(0, bar_index - 2000)
-    int slot       = 0
-    int draw_above = math.min(3, array.size(above_tops))
-    int draw_below = math.min(3, array.size(below_tops))
+    // Anchor left endpoint far back so origin is visible; extend right through session
+    int hist_x = math.max(0, bar_index - 2000)
+    int slot   = 0
+    int da     = math.min(5, array.size(above_t))
+    int db     = math.min(5, array.size(below_t))
 
-    if draw_above > 0
-        for x = 0 to draw_above - 1 by 1
+    if da > 0
+        for x = 0 to da - 1
             if slot < 10
-                array.set(sr_top, slot, line.new(hist_x, array.get(above_tops, x), bar_index, array.get(above_tops, x),
+                array.set(sr_top, slot, line.new(hist_x, array.get(above_t, x), bar_index, array.get(above_t, x),
                      extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
-                array.set(sr_bot, slot, line.new(hist_x, array.get(above_bots, x), bar_index, array.get(above_bots, x),
+                array.set(sr_bot, slot, line.new(hist_x, array.get(above_b, x), bar_index, array.get(above_b, x),
                      extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
                 slot += 1
 
-    if draw_below > 0
-        for x = 0 to draw_below - 1 by 1
+    if db > 0
+        for x = 0 to db - 1
             if slot < 10
-                array.set(sr_top, slot, line.new(hist_x, array.get(below_tops, x), bar_index, array.get(below_tops, x),
+                array.set(sr_top, slot, line.new(hist_x, array.get(below_t, x), bar_index, array.get(below_t, x),
                      extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
-                array.set(sr_bot, slot, line.new(hist_x, array.get(below_bots, x), bar_index, array.get(below_bots, x),
+                array.set(sr_bot, slot, line.new(hist_x, array.get(below_b, x), bar_index, array.get(below_b, x),
                      extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
                 slot += 1
 
-// Cap SR lines at session close so they don't bleed into next day's pre-market
+// Cap lines at session close — no bleed into next day's pre-market
 if show_sr and session_close
-    for x = 0 to 9 by 1
+    for x = 0 to 9
         if not na(array.get(sr_top, x))
             line.set_extend(array.get(sr_top, x), extend.none)
             line.set_x2(array.get(sr_top, x), bar_index)
@@ -555,20 +553,29 @@ alertcondition(above_pm and not above_pm[1],
 alertcondition(below_pm and not below_pm[1],
      "PM Breakout - SHORT", "Price broke below pre-market low.")
 
+// SR break alerts — check against all 10 returned level scalars
+float[] _at = array.from(sr0t, sr1t, sr2t, sr3t, sr4t, sr5t, sr6t, sr7t, sr8t, sr9t)
+float[] _ab = array.from(sr0b, sr1b, sr2b, sr3b, sr4b, sr5b, sr6b, sr7b, sr8b, sr9b)
+
 bool sr_resistance_broken = false
 bool sr_support_broken    = false
 bool sr_not_in_channel    = true
 
-for x = 0 to 9 by 1
-    if close <= array.get(suportresistance, x * 2) and close >= array.get(suportresistance, x * 2 + 1)
+for x = 0 to 9
+    float t = array.get(_at, x)
+    float b = array.get(_ab, x)
+    if t != 0.0 and b != 0.0 and close <= t and close >= b
         sr_not_in_channel := false
 
 if sr_not_in_channel
-    for x = 0 to 9 by 1
-        if close[1] <= array.get(suportresistance, x * 2) and close > array.get(suportresistance, x * 2)
-            sr_resistance_broken := true
-        if close[1] >= array.get(suportresistance, x * 2 + 1) and close < array.get(suportresistance, x * 2 + 1)
-            sr_support_broken := true
+    for x = 0 to 9
+        float t = array.get(_at, x)
+        float b = array.get(_ab, x)
+        if t != 0.0 and b != 0.0
+            if close[1] <= t and close > t
+                sr_resistance_broken := true
+            if close[1] >= b and close < b
+                sr_support_broken := true
 
 alertcondition(sr_resistance_broken, title="SR Resistance Broken", message="SR Resistance Broken")
 alertcondition(sr_support_broken,    title="SR Support Broken",    message="SR Support Broken")
