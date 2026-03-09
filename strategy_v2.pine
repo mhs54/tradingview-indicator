@@ -439,15 +439,6 @@ get_level(ind) =>
             ret := array.get(suportresistance, ind)
     ret
 
-// SR level arrays — recomputed only when a new hourly pivot fires
-var bool levels_dirty = true
-var bool lines_dirty  = true
-
-if (bool(ph) or bool(pl)) and array.size(pivotvals) > 0
-    levels_dirty := true
-if session_open
-    lines_dirty := true
-
 var above_tops = array.new_float(0)
 var above_bots = array.new_float(0)
 var below_tops = array.new_float(0)
@@ -455,8 +446,17 @@ var below_bots = array.new_float(0)
 var sr_top     = array.new_line(10)
 var sr_bot     = array.new_line(10)
 
-// Step 1 — recompute sorted level arrays on new pivot
-if levels_dirty
+// Draw SR lines ONCE at session open — fixed for the entire day.
+// Classify using open price so levels are identical on all timeframes.
+// x1 anchored far left so the line visually shows its historical origin.
+if show_sr and session_open
+    // Delete prior day's lines
+    for x = 0 to 9 by 1
+        line.delete(array.get(sr_top, x))
+        line.delete(array.get(sr_bot, x))
+        array.set(sr_top, x, na)
+        array.set(sr_bot, x, na)
+
     array.clear(above_tops)
     array.clear(above_bots)
     array.clear(below_tops)
@@ -470,13 +470,15 @@ if levels_dirty
             bool in_pm_zone = has_pm and bot_lvl >= pml and top_lvl <= pmh
             if not in_pm_zone
                 float mid = (top_lvl + bot_lvl) / 2
-                if mid >= close
+                // Use open (session open price), not close — avoids timeframe-dependent classification
+                if mid >= open
                     array.push(above_tops, top_lvl)
                     array.push(above_bots, bot_lvl)
                 else
                     array.push(below_tops, top_lvl)
                     array.push(below_bots, bot_lvl)
 
+    // Sort above ascending by bot (closest above first)
     int above_sz = array.size(above_bots)
     if above_sz >= 2
         for i = 0 to above_sz - 2 by 1
@@ -489,6 +491,7 @@ if levels_dirty
                     array.set(above_tops, j + 1, tmp_t)
                     array.set(above_bots, j + 1, tmp_b)
 
+    // Sort below descending by top (closest below first)
     int below_sz = array.size(below_tops)
     if below_sz >= 2
         for i = 0 to below_sz - 2 by 1
@@ -501,48 +504,36 @@ if levels_dirty
                     array.set(below_tops, j + 1, tmp_t)
                     array.set(below_bots, j + 1, tmp_b)
 
-    levels_dirty := false
-    lines_dirty  := true
-
-// Step 2 — draw lines at session open or when levels change (regular session only)
-if show_sr and lines_dirty and is_regular
-    for x = 0 to 9 by 1
-        line.delete(array.get(sr_top, x))
-        line.delete(array.get(sr_bot, x))
-        array.set(sr_top, x, na)
-        array.set(sr_bot, x, na)
-
+    // Anchor left endpoint far into history so origin is visible on chart
+    int hist_x     = math.max(0, bar_index - 2000)
     int slot       = 0
     int draw_above = math.min(3, array.size(above_tops))
     int draw_below = math.min(3, array.size(below_tops))
 
-    if draw_above > 0
-        for x = 0 to draw_above - 1 by 1
-            if slot < 10
-                array.set(sr_top, slot, line.new(bar_index, array.get(above_tops, x), bar_index + 1, array.get(above_tops, x),
-                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
-                array.set(sr_bot, slot, line.new(bar_index, array.get(above_bots, x), bar_index + 1, array.get(above_bots, x),
-                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
-                slot += 1
+    for x = 0 to draw_above - 1 by 1
+        if slot < 10
+            array.set(sr_top, slot, line.new(hist_x, array.get(above_tops, x), bar_index, array.get(above_tops, x),
+                 extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
+            array.set(sr_bot, slot, line.new(hist_x, array.get(above_bots, x), bar_index, array.get(above_bots, x),
+                 extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
+            slot += 1
 
-    if draw_below > 0
-        for x = 0 to draw_below - 1 by 1
-            if slot < 10
-                array.set(sr_top, slot, line.new(bar_index, array.get(below_tops, x), bar_index + 1, array.get(below_tops, x),
-                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
-                array.set(sr_bot, slot, line.new(bar_index, array.get(below_bots, x), bar_index + 1, array.get(below_bots, x),
-                     extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
-                slot += 1
-
-    lines_dirty := false
+    for x = 0 to draw_below - 1 by 1
+        if slot < 10
+            array.set(sr_top, slot, line.new(hist_x, array.get(below_tops, x), bar_index, array.get(below_tops, x),
+                 extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
+            array.set(sr_bot, slot, line.new(hist_x, array.get(below_bots, x), bar_index, array.get(below_bots, x),
+                 extend=extend.right, color=color.yellow, width=1, style=line.style_solid))
+            slot += 1
 
 // Cap SR lines at session close so they don't bleed into next day's pre-market
 if show_sr and session_close
     for x = 0 to 9 by 1
         if not na(array.get(sr_top, x))
             line.set_extend(array.get(sr_top, x), extend.none)
-            line.set_extend(array.get(sr_bot, x), extend.none)
             line.set_x2(array.get(sr_top, x), bar_index)
+        if not na(array.get(sr_bot, x))
+            line.set_extend(array.get(sr_bot, x), extend.none)
             line.set_x2(array.get(sr_bot, x), bar_index)
 
 // =============================================================================
