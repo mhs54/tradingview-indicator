@@ -96,7 +96,7 @@ changeit(x, y) =>
     array.set(suportresistance, y * 2 + 1, array.get(suportresistance, x * 2 + 1))
     array.set(suportresistance, x * 2 + 1, tmp)
 
-if bool(ph) or bool(pl)
+if (bool(ph) or bool(pl)) and array.size(pivotvals) > 0
     supres = array.new_float(0)
     stren  = array.new_float(10, 0)
     int npv = array.size(pivotvals)
