@@ -354,16 +354,10 @@ float retrace_short = not na(day_range) and day_range > 0 ? day_low  + 0.40 * da
 
 var bool suppress_long  = false
 var bool suppress_short = false
-// pc_used: set when an active PC arrow gets triggered (price breaks through it).
-// Blocks new PCs until price makes a new session extreme (new swing leg begins).
-var bool pc_used_long  = false
-var bool pc_used_short = false
 
 if session_open
     suppress_long  := false
     suppress_short := false
-    pc_used_long   := false
-    pc_used_short  := false
 
 if is_regular and not na(retrace_short) and trend_dir == -1 and high >= retrace_short
     suppress_short := true
@@ -372,10 +366,8 @@ if is_regular and not na(retrace_long)  and trend_dir == 1  and low  <= retrace_
 
 if is_regular and not na(day_low[1])  and low  < day_low[1]
     suppress_short := false
-    pc_used_short  := false
 if is_regular and not na(day_high[1]) and high > day_high[1]
     suppress_long  := false
-    pc_used_long   := false
 
 float atr_val = ta.atr(14)
 float tri_h   = atr_val * 0.40
@@ -397,21 +389,13 @@ bool retrace_short_hit = trend_dir == -1 and suppress_short and not suppress_sho
 bool retrace_long_hit  = trend_dir == 1  and suppress_long  and not suppress_long[1]
 bool retrace_just_hit  = retrace_short_hit or retrace_long_hit
 
-// Mark PC as used only when there was an active arrow AND price broke through it.
-// pc_used resets when a new session extreme is made (new swing leg).
-if pc_long_done and not na(pc_poly)
-    pc_used_long := true
-    pc_poly := na
-    pc_warn := na
-if pc_short_done and not na(pc_poly)
-    pc_used_short := true
-    pc_poly := na
-    pc_warn := na
-if retrace_just_hit
+if pc_long_done or pc_short_done or retrace_just_hit
     pc_poly := na
     pc_warn := na
 
-if show_pc and pc_long_valid and not suppress_long and not pc_used_long
+if show_pc and pc_long_valid and not suppress_long
+    polyline.delete(pc_poly)
+    label.delete(pc_warn)
     pc_warn := na
     pc_poly := polyline.new(
          array.from(
@@ -422,10 +406,12 @@ if show_pc and pc_long_valid and not suppress_long and not pc_used_long
          fill_color=color.new(color.green, 0),
          line_color=warn_long ? color.yellow : color.new(color.green, 0))
     if warn_long
-        pc_warn := label.new(bar_index, low - tri_gap - tri_h - (atr_val * 0.08), "!",
+        pc_warn := label.new(bar_index, low - tri_gap - tri_h - (atr_val * 0.15), "!",
              style=label.style_none, textcolor=color.yellow, size=size.huge)
 
-else if show_pc and pc_short_valid and not suppress_short and not pc_used_short
+else if show_pc and pc_short_valid and not suppress_short
+    polyline.delete(pc_poly)
+    label.delete(pc_warn)
     pc_warn := na
     pc_poly := polyline.new(
          array.from(
@@ -436,7 +422,7 @@ else if show_pc and pc_short_valid and not suppress_short and not pc_used_short
          fill_color=color.new(color.red, 0),
          line_color=warn_short ? color.yellow : color.new(color.red, 0))
     if warn_short
-        pc_warn := label.new(bar_index, high + tri_gap + tri_h + (atr_val * 0.08), "!",
+        pc_warn := label.new(bar_index, high + tri_gap + tri_h + (atr_val * 0.15), "!",
              style=label.style_none, textcolor=color.yellow, size=size.huge)
 
 // =============================================================================
