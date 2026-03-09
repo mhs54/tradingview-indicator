@@ -73,13 +73,26 @@ minstrength   = input.int(1,      "Minimum Strength",           group=grp_sr, mi
 loopback_days = input.int(60,     "Loopback Period (Days)",     group=grp_sr, minval=5, maxval=365)
 
 // =============================================================================
+// SECURITY CALLS — all hourly calls combined into one to minimise context switches
+// =============================================================================
+float _sr_src1 = ppsrc == "High/Low" ? high : math.max(close, open)
+float _sr_src2 = ppsrc == "High/Low" ? low  : math.min(close, open)
+
+[sma200_1h, ph, pl, prdhighest, prdlowest] = request.security(
+     syminfo.tickerid, "60",
+     [ta.sma(close, 200),
+      ta.pivothigh(_sr_src1, prd, prd),
+      ta.pivotlow(_sr_src2,  prd, prd),
+      ta.highest(300),
+      ta.lowest(300)])
+
+// =============================================================================
 // MOVING AVERAGES
 // =============================================================================
 sma8       = ta.sma(close, 8)
 sma21      = ta.sma(close, 21)
 sma200_5m  = request.security(syminfo.tickerid, "5",  ta.sma(close, 200))
 sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
-sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
 
 plot(show_8       ? sma8       : na, "8 SMA",          color=col_8,        linewidth=width_8)
 plot(show_21      ? sma21      : na, "21 SMA",         color=col_21,       linewidth=width_21)
@@ -325,15 +338,9 @@ else if show_pc and pc_short_valid and not suppress_short
 
 // =============================================================================
 // SR CHANNELS — hourly pivots, prior days only
+// (ph, pl, prdhighest, prdlowest fetched above in combined hourly security call)
 // =============================================================================
-float sr_src1    = ppsrc == "High/Low" ? high : math.max(close, open)
-float sr_src2    = ppsrc == "High/Low" ? low  : math.min(close, open)
-
-float ph         = request.security(syminfo.tickerid, "60", ta.pivothigh(sr_src1, prd, prd))
-float pl         = request.security(syminfo.tickerid, "60", ta.pivotlow(sr_src2,  prd, prd))
-float prdhighest = request.security(syminfo.tickerid, "60", ta.highest(300))
-float prdlowest  = request.security(syminfo.tickerid, "60", ta.lowest(300))
-float cwidth     = (prdhighest - prdlowest) * ChannelW / 100
+float cwidth = (prdhighest - prdlowest) * ChannelW / 100
 
 // Only use pivots from prior days (not current trading day)
 int _cy          = year(timenow,  "America/New_York")
@@ -459,17 +466,20 @@ if show_sr and levels_dirty
     array.clear(below_tops)
     array.clear(below_bots)
 
+    bool has_pm = not na(pmh) and not na(pml)
     for x = 0 to 9 by 1
         float top_lvl = get_level(x * 2)
         float bot_lvl = get_level(x * 2 + 1)
         if not na(top_lvl) and not na(bot_lvl)
-            float mid = (top_lvl + bot_lvl) / 2
-            if mid >= close
-                array.push(above_tops, top_lvl)
-                array.push(above_bots, bot_lvl)
-            else
-                array.push(below_tops, top_lvl)
-                array.push(below_bots, bot_lvl)
+            bool in_pm_zone = has_pm and bot_lvl >= pml and top_lvl <= pmh
+            if not in_pm_zone
+                float mid = (top_lvl + bot_lvl) / 2
+                if mid >= close
+                    array.push(above_tops, top_lvl)
+                    array.push(above_bots, bot_lvl)
+                else
+                    array.push(below_tops, top_lvl)
+                    array.push(below_bots, bot_lvl)
 
     int above_sz = array.size(above_bots)
     if above_sz >= 2
