@@ -721,8 +721,9 @@ if show_kl and session_open
                     if math.abs(p - array.get(accepted, k)) < kl_min_space
                         ok := false
                         break
-            // Skip levels inside or within $0.25 of today's PM range
-            bool in_pm_zone = not na(pmh) and not na(pml) and p <= pmh + 0.25 and p >= pml - 0.25
+            // Skip ETH/monthly levels within $0.40 of PM range — hourly, psychological, daily are exempt
+            bool pm_exempt  = array.get(vt, i) >= 1.0
+            bool in_pm_zone = not pm_exempt and not na(pmh) and not na(pml) and p <= pmh + 0.40 and p >= pml - 0.40
             if ok and not in_pm_zone
                 array.push(accepted, p)
 
