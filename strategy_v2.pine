@@ -659,18 +659,18 @@ if show_kl and session_open
         array.push(vp, sma200_1h)
         array.push(vt, 30.0)
 
-    // Add monthly OHLC levels — deep history (priority 0.8, above ETH, below all daily RTH)
+    // Add monthly OHLC levels — deep history (priority 0.5 — lowest)
     float[] _mo_p = array.from(mo_h1, mo_l1, mo_c1, mo_o1, mo_h2, mo_l2, mo_c2, mo_o2, mo_h3, mo_l3, mo_c3, mo_o3, mo_h4, mo_l4, mo_c4, mo_o4, mo_h5, mo_l5, mo_c5, mo_o5)
     for _mi = 0 to 19
         float _mp = array.get(_mo_p, _mi)
         if not na(_mp) and _mp > 0.0
             array.push(vp, _mp)
-            array.push(vt, 0.8)
+            array.push(vt, 0.5)
 
-    // Add psychological levels ($50 increments: 100, 150, 200 ... 650) (priority 0.5 — lowest)
+    // Add psychological levels ($50 increments: 100, 150, 200 ... 650) (priority 29 — below hourly 200, above all daily)
     for _ps = 2 to 13
         array.push(vp, float(_ps) * 50.0)
-        array.push(vt, 0.5)
+        array.push(vt, 29.0)
 
     // Add ETH levels where extended session exceeded RTH range (priority 0.75)
     // eth_hN > kl_hN means premarket or afterhours pushed above RTH high → genuine ETH level
