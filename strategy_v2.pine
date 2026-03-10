@@ -721,12 +721,8 @@ if show_kl and session_open
                     if math.abs(p - array.get(accepted, k)) < kl_min_space
                         ok := false
                         break
-            // Always exclude levels strictly inside the PM zone
-            // Also exclude ETH/monthly within $0.40 buffer outside PM boundaries
-            bool pm_exempt   = array.get(vt, i) >= 1.0
-            bool inside_pm   = not na(pmh) and not na(pml) and p <= pmh and p >= pml
-            bool near_pm_buf = not pm_exempt and not na(pmh) and not na(pml) and p <= pmh + 0.40 and p >= pml - 0.40
-            bool in_pm_zone  = inside_pm or near_pm_buf
+            // Exclude all levels inside or within $0.40 of PM boundaries
+            bool in_pm_zone = not na(pmh) and not na(pml) and p <= pmh + 0.40 and p >= pml - 0.40
             if ok and not in_pm_zone
                 array.push(accepted, p)
 
