@@ -81,15 +81,19 @@ get_daily_levels() =>
      high[4], low[4], close[4], open[4],
      high[5], low[5], close[5], open[5],
      high[6], low[6], close[6], open[6],
-     high[7], low[7], close[7], open[7]]
+     high[7], low[7], close[7], open[7],
+     high[8], low[8], close[8], open[8],
+     high[9], low[9], close[9], open[9],
+     high[10], low[10], close[10], open[10]]
 
 // =============================================================================
-// ETH LEVELS FUNCTION — returns 7 prior days of extended session H/L.
+// ETH LEVELS FUNCTION — returns 10 prior days of extended session H/L.
 // Extended session includes premarket and afterhours.
 // Only candidates where ETH exceeded the RTH range will be added.
 // =============================================================================
 get_eth_levels() =>
-    [high[1], low[1], high[2], low[2], high[3], low[3], high[4], low[4], high[5], low[5], high[6], low[6], high[7], low[7]]
+    [high[1], low[1], high[2], low[2], high[3], low[3], high[4], low[4], high[5], low[5],
+     high[6], low[6], high[7], low[7], high[8], low[8], high[9], low[9], high[10], low[10]]
 
 // =============================================================================
 // MONTHLY LEVELS FUNCTION — returns 5 prior months of OHLC as scalars.
@@ -103,7 +107,7 @@ get_monthly_levels() =>
      high[5], low[5], close[5], open[5]]
 
 // =============================================================================
-// HOURLY LEVELS FUNCTION — returns 30 prior hourly RTH H/L pairs (~4-5 days).
+// HOURLY LEVELS FUNCTION — returns 60 prior hourly RTH H/L pairs (~8-9 days).
 // Provides intraday reaction zones missed by daily OHLC.
 // =============================================================================
 get_hourly_levels() =>
@@ -112,7 +116,13 @@ get_hourly_levels() =>
      high[11], low[11], high[12], low[12], high[13], low[13], high[14], low[14], high[15], low[15],
      high[16], low[16], high[17], low[17], high[18], low[18], high[19], low[19], high[20], low[20],
      high[21], low[21], high[22], low[22], high[23], low[23], high[24], low[24], high[25], low[25],
-     high[26], low[26], high[27], low[27], high[28], low[28], high[29], low[29], high[30], low[30]]
+     high[26], low[26], high[27], low[27], high[28], low[28], high[29], low[29], high[30], low[30],
+     high[31], low[31], high[32], low[32], high[33], low[33], high[34], low[34], high[35], low[35],
+     high[36], low[36], high[37], low[37], high[38], low[38], high[39], low[39], high[40], low[40],
+     high[41], low[41], high[42], low[42], high[43], low[43], high[44], low[44], high[45], low[45],
+     high[46], low[46], high[47], low[47], high[48], low[48], high[49], low[49], high[50], low[50],
+     high[51], low[51], high[52], low[52], high[53], low[53], high[54], low[54], high[55], low[55],
+     high[56], low[56], high[57], low[57], high[58], low[58], high[59], low[59], high[60], low[60]]
 
 // =============================================================================
 // SECURITY CALLS
@@ -121,21 +131,19 @@ sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
 sma200_5m  = request.security(syminfo.tickerid, "5",  ta.sma(close, 200))
 sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
 
-// 7 prior days of RTH-only OHLC (H=4, L=3, C=2, O=1 priority)
-// ticker.modify forces regular session so high/low/open/close are purely RTH
+// 10 prior days of RTH-only OHLC
 string _rth_ticker = ticker.modify(syminfo.tickerid, session=session.regular)
-[kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7] = request.security(_rth_ticker, "D", get_daily_levels(), lookahead=barmerge.lookahead_on)
+[kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7, kl_h8, kl_l8, kl_c8, kl_o8, kl_h9, kl_l9, kl_c9, kl_o9, kl_h10, kl_l10, kl_c10, kl_o10] = request.security(_rth_ticker, "D", get_daily_levels(), lookahead=barmerge.lookahead_on)
 
-// 7 prior days of extended session H/L (premarket + afterhours)
-// Only used where ETH exceeded the RTH range — adds genuine ETH-only levels
+// 10 prior days of extended session H/L (premarket + afterhours)
 string _eth_ticker = ticker.modify(syminfo.tickerid, session=session.extended)
-[eth_h1, eth_l1, eth_h2, eth_l2, eth_h3, eth_l3, eth_h4, eth_l4, eth_h5, eth_l5, eth_h6, eth_l6, eth_h7, eth_l7] = request.security(_eth_ticker, "D", get_eth_levels(), lookahead=barmerge.lookahead_on)
+[eth_h1, eth_l1, eth_h2, eth_l2, eth_h3, eth_l3, eth_h4, eth_l4, eth_h5, eth_l5, eth_h6, eth_l6, eth_h7, eth_l7, eth_h8, eth_l8, eth_h9, eth_l9, eth_h10, eth_l10] = request.security(_eth_ticker, "D", get_eth_levels(), lookahead=barmerge.lookahead_on)
 
 // 5 prior months of OHLC — deep history for revisiting old levels
 [mo_h1, mo_l1, mo_c1, mo_o1, mo_h2, mo_l2, mo_c2, mo_o2, mo_h3, mo_l3, mo_c3, mo_o3, mo_h4, mo_l4, mo_c4, mo_o4, mo_h5, mo_l5, mo_c5, mo_o5] = request.security(_rth_ticker, "M", get_monthly_levels(), lookahead=barmerge.lookahead_on)
 
-// 30 prior hourly RTH H/L — intraday reaction zones (~4-5 days of 1H candles)
-[hr_h1, hr_l1, hr_h2, hr_l2, hr_h3, hr_l3, hr_h4, hr_l4, hr_h5, hr_l5, hr_h6, hr_l6, hr_h7, hr_l7, hr_h8, hr_l8, hr_h9, hr_l9, hr_h10, hr_l10, hr_h11, hr_l11, hr_h12, hr_l12, hr_h13, hr_l13, hr_h14, hr_l14, hr_h15, hr_l15, hr_h16, hr_l16, hr_h17, hr_l17, hr_h18, hr_l18, hr_h19, hr_l19, hr_h20, hr_l20, hr_h21, hr_l21, hr_h22, hr_l22, hr_h23, hr_l23, hr_h24, hr_l24, hr_h25, hr_l25, hr_h26, hr_l26, hr_h27, hr_l27, hr_h28, hr_l28, hr_h29, hr_l29, hr_h30, hr_l30] = request.security(_rth_ticker, "60", get_hourly_levels(), lookahead=barmerge.lookahead_on)
+// 60 prior hourly RTH H/L — intraday reaction zones (~8-9 days of 1H candles)
+[hr_h1, hr_l1, hr_h2, hr_l2, hr_h3, hr_l3, hr_h4, hr_l4, hr_h5, hr_l5, hr_h6, hr_l6, hr_h7, hr_l7, hr_h8, hr_l8, hr_h9, hr_l9, hr_h10, hr_l10, hr_h11, hr_l11, hr_h12, hr_l12, hr_h13, hr_l13, hr_h14, hr_l14, hr_h15, hr_l15, hr_h16, hr_l16, hr_h17, hr_l17, hr_h18, hr_l18, hr_h19, hr_l19, hr_h20, hr_l20, hr_h21, hr_l21, hr_h22, hr_l22, hr_h23, hr_l23, hr_h24, hr_l24, hr_h25, hr_l25, hr_h26, hr_l26, hr_h27, hr_l27, hr_h28, hr_l28, hr_h29, hr_l29, hr_h30, hr_l30, hr_h31, hr_l31, hr_h32, hr_l32, hr_h33, hr_l33, hr_h34, hr_l34, hr_h35, hr_l35, hr_h36, hr_l36, hr_h37, hr_l37, hr_h38, hr_l38, hr_h39, hr_l39, hr_h40, hr_l40, hr_h41, hr_l41, hr_h42, hr_l42, hr_h43, hr_l43, hr_h44, hr_l44, hr_h45, hr_l45, hr_h46, hr_l46, hr_h47, hr_l47, hr_h48, hr_l48, hr_h49, hr_l49, hr_h50, hr_l50, hr_h51, hr_l51, hr_h52, hr_l52, hr_h53, hr_l53, hr_h54, hr_l54, hr_h55, hr_l55, hr_h56, hr_l56, hr_h57, hr_l57, hr_h58, hr_l58, hr_h59, hr_l59, hr_h60, hr_l60] = request.security(_rth_ticker, "60", get_hourly_levels(), lookahead=barmerge.lookahead_on)
 
 // =============================================================================
 // MOVING AVERAGES
@@ -423,19 +431,19 @@ if show_kl and session_open
     float[] vp = array.new_float(0)
     float[] vt = array.new_float(0)
 
-    // Daily RTH H/L — priority 30 (day1 H) down to 17 (day7 L). Always beats O/C.
-    float[] _hl_v = array.from(kl_h1, kl_l1, kl_h2, kl_l2, kl_h3, kl_l3, kl_h4, kl_l4, kl_h5, kl_l5, kl_h6, kl_l6, kl_h7, kl_l7)
-    float[] _hl_t = array.from(30.0, 29.0, 28.0, 27.0, 26.0, 25.0, 24.0, 23.0, 22.0, 21.0, 20.0, 19.0, 18.0, 17.0)
-    for _i = 0 to 13
+    // Daily RTH H/L — priority 30 (day1 H) down to 11 (day10 L). Always beats O/C.
+    float[] _hl_v = array.from(kl_h1, kl_l1, kl_h2, kl_l2, kl_h3, kl_l3, kl_h4, kl_l4, kl_h5, kl_l5, kl_h6, kl_l6, kl_h7, kl_l7, kl_h8, kl_l8, kl_h9, kl_l9, kl_h10, kl_l10)
+    float[] _hl_t = array.from(30.0, 29.0, 28.0, 27.0, 26.0, 25.0, 24.0, 23.0, 22.0, 21.0, 20.0, 19.0, 18.0, 17.0, 16.0, 15.0, 14.0, 13.0, 12.0, 11.0)
+    for _i = 0 to 19
         float _p = array.get(_hl_v, _i)
         if not na(_p) and _p > 0.0
             array.push(vp, _p)
             array.push(vt, array.get(_hl_t, _i))
 
-    // Daily RTH O/C — priority 16 (day1 O) down to 3 (day7 C).
-    float[] _oc_v = array.from(kl_o1, kl_c1, kl_o2, kl_c2, kl_o3, kl_c3, kl_o4, kl_c4, kl_o5, kl_c5, kl_o6, kl_c6, kl_o7, kl_c7)
-    float[] _oc_t = array.from(16.0, 15.0, 14.0, 13.0, 12.0, 11.0, 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0)
-    for _i = 0 to 13
+    // Daily RTH O/C — priority 10.5 (day1 O) down to 2.9 (day10 C). All beat hourly H/L (2.5).
+    float[] _oc_v = array.from(kl_o1, kl_c1, kl_o2, kl_c2, kl_o3, kl_c3, kl_o4, kl_c4, kl_o5, kl_c5, kl_o6, kl_c6, kl_o7, kl_c7, kl_o8, kl_c8, kl_o9, kl_c9, kl_o10, kl_c10)
+    float[] _oc_t = array.from(10.5, 10.0, 9.5, 9.0, 8.5, 8.0, 7.5, 7.0, 6.5, 6.0, 5.5, 5.0, 4.5, 4.0, 3.9, 3.7, 3.5, 3.3, 3.1, 2.9)
+    for _i = 0 to 19
         float _p = array.get(_oc_v, _i)
         if not na(_p) and _p > 0.0
             array.push(vp, _p)
@@ -467,11 +475,11 @@ if show_kl and session_open
             array.push(vt, 0.5)
 
     // ETH H/L where extended session exceeded RTH range — priority 1.5
-    float[] _eth_h = array.from(eth_h1, eth_h2, eth_h3, eth_h4, eth_h5, eth_h6, eth_h7)
-    float[] _eth_l = array.from(eth_l1, eth_l2, eth_l3, eth_l4, eth_l5, eth_l6, eth_l7)
-    float[] _rth_h = array.from(kl_h1, kl_h2, kl_h3, kl_h4, kl_h5, kl_h6, kl_h7)
-    float[] _rth_l = array.from(kl_l1, kl_l2, kl_l3, kl_l4, kl_l5, kl_l6, kl_l7)
-    for _ei = 0 to 6
+    float[] _eth_h = array.from(eth_h1, eth_h2, eth_h3, eth_h4, eth_h5, eth_h6, eth_h7, eth_h8, eth_h9, eth_h10)
+    float[] _eth_l = array.from(eth_l1, eth_l2, eth_l3, eth_l4, eth_l5, eth_l6, eth_l7, eth_l8, eth_l9, eth_l10)
+    float[] _rth_h = array.from(kl_h1, kl_h2, kl_h3, kl_h4, kl_h5, kl_h6, kl_h7, kl_h8, kl_h9, kl_h10)
+    float[] _rth_l = array.from(kl_l1, kl_l2, kl_l3, kl_l4, kl_l5, kl_l6, kl_l7, kl_l8, kl_l9, kl_l10)
+    for _ei = 0 to 9
         float _eh = array.get(_eth_h, _ei)
         float _el = array.get(_eth_l, _ei)
         float _rh = array.get(_rth_h, _ei)
@@ -483,13 +491,13 @@ if show_kl and session_open
             array.push(vp, _el)
             array.push(vt, 1.5)
 
-    // Hourly RTH H/L — intraday reaction zones, priority 2.5-2.1 by recency group
-    float[] _hr_h = array.from(hr_h1, hr_h2, hr_h3, hr_h4, hr_h5, hr_h6, hr_h7, hr_h8, hr_h9, hr_h10, hr_h11, hr_h12, hr_h13, hr_h14, hr_h15, hr_h16, hr_h17, hr_h18, hr_h19, hr_h20, hr_h21, hr_h22, hr_h23, hr_h24, hr_h25, hr_h26, hr_h27, hr_h28, hr_h29, hr_h30)
-    float[] _hr_l = array.from(hr_l1, hr_l2, hr_l3, hr_l4, hr_l5, hr_l6, hr_l7, hr_l8, hr_l9, hr_l10, hr_l11, hr_l12, hr_l13, hr_l14, hr_l15, hr_l16, hr_l17, hr_l18, hr_l19, hr_l20, hr_l21, hr_l22, hr_l23, hr_l24, hr_l25, hr_l26, hr_l27, hr_l28, hr_l29, hr_l30)
-    for _hi = 0 to 29
+    // Hourly RTH H/L — intraday reaction zones, priority 2.5-1.7 by recency group (~7 bars/day)
+    float[] _hr_h = array.from(hr_h1, hr_h2, hr_h3, hr_h4, hr_h5, hr_h6, hr_h7, hr_h8, hr_h9, hr_h10, hr_h11, hr_h12, hr_h13, hr_h14, hr_h15, hr_h16, hr_h17, hr_h18, hr_h19, hr_h20, hr_h21, hr_h22, hr_h23, hr_h24, hr_h25, hr_h26, hr_h27, hr_h28, hr_h29, hr_h30, hr_h31, hr_h32, hr_h33, hr_h34, hr_h35, hr_h36, hr_h37, hr_h38, hr_h39, hr_h40, hr_h41, hr_h42, hr_h43, hr_h44, hr_h45, hr_h46, hr_h47, hr_h48, hr_h49, hr_h50, hr_h51, hr_h52, hr_h53, hr_h54, hr_h55, hr_h56, hr_h57, hr_h58, hr_h59, hr_h60)
+    float[] _hr_l = array.from(hr_l1, hr_l2, hr_l3, hr_l4, hr_l5, hr_l6, hr_l7, hr_l8, hr_l9, hr_l10, hr_l11, hr_l12, hr_l13, hr_l14, hr_l15, hr_l16, hr_l17, hr_l18, hr_l19, hr_l20, hr_l21, hr_l22, hr_l23, hr_l24, hr_l25, hr_l26, hr_l27, hr_l28, hr_l29, hr_l30, hr_l31, hr_l32, hr_l33, hr_l34, hr_l35, hr_l36, hr_l37, hr_l38, hr_l39, hr_l40, hr_l41, hr_l42, hr_l43, hr_l44, hr_l45, hr_l46, hr_l47, hr_l48, hr_l49, hr_l50, hr_l51, hr_l52, hr_l53, hr_l54, hr_l55, hr_l56, hr_l57, hr_l58, hr_l59, hr_l60)
+    for _hi = 0 to 59
         float _hh = array.get(_hr_h, _hi)
         float _hl = array.get(_hr_l, _hi)
-        float _hp = _hi < 7 ? 2.5 : _hi < 14 ? 2.4 : _hi < 21 ? 2.3 : _hi < 28 ? 2.2 : 2.1
+        float _hp = _hi < 7 ? 2.5 : _hi < 14 ? 2.4 : _hi < 21 ? 2.3 : _hi < 28 ? 2.2 : _hi < 35 ? 2.1 : _hi < 42 ? 2.0 : _hi < 49 ? 1.9 : _hi < 56 ? 1.8 : 1.7
         if not na(_hh) and _hh > 0.0
             array.push(vp, _hh)
             array.push(vt, _hp)
