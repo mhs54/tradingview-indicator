@@ -11,24 +11,24 @@ indicator("Day Trading Strategy v2", overlay=true, max_bars_back=501, max_lines_
 // =============================================================================
 grp_sma = "Moving Averages"
 
-show_8        = input.bool(true,          "Show 8 SMA",          inline="8",   group=grp_sma)
-col_8         = input.color(color.blue,   "",                    inline="8",   group=grp_sma)
+show_8        = input.bool(true,           "Show 8 SMA",          inline="8",   group=grp_sma)
+col_8         = input.color(color.green,  "",                    inline="8",   group=grp_sma)
 width_8       = input.int(1, "",          minval=1, maxval=4,    inline="8",   group=grp_sma)
 
 show_21       = input.bool(true,          "Show 21 SMA",         inline="21",  group=grp_sma)
-col_21        = input.color(color.purple, "",                    inline="21",  group=grp_sma)
+col_21        = input.color(color.red,    "",                    inline="21",  group=grp_sma)
 width_21      = input.int(2, "",          minval=1, maxval=4,    inline="21",  group=grp_sma)
 
 show_200_5m   = input.bool(true,          "Show 5min 200 SMA",   inline="5m",  group=grp_sma)
-col_200_5m    = input.color(color.orange, "",                    inline="5m",  group=grp_sma)
+col_200_5m    = input.color(color.yellow, "",                    inline="5m",  group=grp_sma)
 width_200_5m  = input.int(2, "",          minval=1, maxval=4,    inline="5m",  group=grp_sma)
 
 show_200_10m  = input.bool(true,          "Show 10min 200 SMA",  inline="10m", group=grp_sma)
-col_200_10m   = input.color(color.yellow, "",                    inline="10m", group=grp_sma)
+col_200_10m   = input.color(color.orange, "",                    inline="10m", group=grp_sma)
 width_200_10m = input.int(2, "",          minval=1, maxval=4,    inline="10m", group=grp_sma)
 
 show_200_1h   = input.bool(true,          "Show Hourly 200 SMA", inline="1h",  group=grp_sma)
-col_200_1h    = input.color(color.red,    "",                    inline="1h",  group=grp_sma)
+col_200_1h    = input.color(#FF69B4,      "",                    inline="1h",  group=grp_sma)
 width_200_1h  = input.int(2, "",          minval=1, maxval=4,    inline="1h",  group=grp_sma)
 
 // =============================================================================
@@ -36,7 +36,7 @@ width_200_1h  = input.int(2, "",          minval=1, maxval=4,    inline="1h",  g
 // =============================================================================
 grp_vwap   = "VWAP"
 show_vwap  = input.bool(true,        "Show VWAP", inline="vwap", group=grp_vwap)
-col_vwap   = input.color(color.teal, "",          inline="vwap", group=grp_vwap)
+col_vwap   = input.color(color.white, "",          inline="vwap", group=grp_vwap)
 width_vwap = input.int(2, "",        minval=1, maxval=4, inline="vwap", group=grp_vwap)
 
 // =============================================================================
