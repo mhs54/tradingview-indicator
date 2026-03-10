@@ -67,7 +67,7 @@ warn_sma_dist = input.float(1.0,  "Hourly 200 SMA Warning Distance ($)", group=g
 grp_kl       = "Key Levels"
 show_kl      = input.bool(true,          "Show Key Levels",       group=grp_kl)
 col_kl       = input.color(color.yellow, "Color",                 group=grp_kl)
-kl_min_space = input.float(0.80,         "Min Spacing ($)",       group=grp_kl, minval=0.25, step=0.25)
+kl_min_space = input.float(1.00,         "Min Spacing ($)",       group=grp_kl, minval=0.25, step=0.25)
 
 // =============================================================================
 // INPUTS — SR CHANNELS
@@ -614,7 +614,9 @@ if show_kl and session_open
 
     // All 28 candidates: prices and priorities (H=4, L=3, C=2, O=1 as floats)
     float[] all_p = array.from(kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7)
-    float[] all_t = array.from(4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0)
+    // Priority: recent days beat older days, H>L>C>O within each day
+    // day1: 28-25, day2: 24-21, day3: 20-17, day4: 16-13, day5: 12-9, day6: 8-5, day7: 4-1
+    float[] all_t = array.from(28.0, 27.0, 26.0, 25.0, 24.0, 23.0, 22.0, 21.0, 20.0, 19.0, 18.0, 17.0, 16.0, 15.0, 14.0, 13.0, 12.0, 11.0, 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0)
 
     // Filter out na/zero into working arrays
     float[] vp = array.new_float(0)
@@ -655,8 +657,8 @@ if show_kl and session_open
                     if math.abs(p - array.get(accepted, k)) < kl_min_space
                         ok := false
                         break
-            // Skip levels inside today's PM range
-            bool in_pm_zone = not na(pmh) and not na(pml) and p <= pmh and p >= pml
+            // Skip levels inside or within $0.25 of today's PM range
+            bool in_pm_zone = not na(pmh) and not na(pml) and p <= pmh + 0.25 and p >= pml - 0.25
             if ok and not in_pm_zone
                 array.push(accepted, p)
 
