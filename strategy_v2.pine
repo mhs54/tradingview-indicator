@@ -226,15 +226,15 @@ sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
 // 7 prior days of RTH-only OHLC (H=4, L=3, C=2, O=1 priority)
 // ticker.modify forces regular session so high/low/open/close are purely RTH
 string _rth_ticker = ticker.modify(syminfo.tickerid, session=session.regular)
-[kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7] = request.security(_rth_ticker, "D", get_daily_levels())
+[kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7] = request.security(_rth_ticker, "D", get_daily_levels(), lookahead=barmerge.lookahead_on)
 
 // 7 prior days of extended session H/L (premarket + afterhours)
 // Only used where ETH exceeded the RTH range — adds genuine ETH-only levels
 string _eth_ticker = ticker.modify(syminfo.tickerid, session=session.extended)
-[eth_h1, eth_l1, eth_h2, eth_l2, eth_h3, eth_l3, eth_h4, eth_l4, eth_h5, eth_l5, eth_h6, eth_l6, eth_h7, eth_l7] = request.security(_eth_ticker, "D", get_eth_levels())
+[eth_h1, eth_l1, eth_h2, eth_l2, eth_h3, eth_l3, eth_h4, eth_l4, eth_h5, eth_l5, eth_h6, eth_l6, eth_h7, eth_l7] = request.security(_eth_ticker, "D", get_eth_levels(), lookahead=barmerge.lookahead_on)
 
 // 5 prior months of OHLC — deep history for revisiting old levels
-[mo_h1, mo_l1, mo_c1, mo_o1, mo_h2, mo_l2, mo_c2, mo_o2, mo_h3, mo_l3, mo_c3, mo_o3, mo_h4, mo_l4, mo_c4, mo_o4, mo_h5, mo_l5, mo_c5, mo_o5] = request.security(_rth_ticker, "M", get_monthly_levels())
+[mo_h1, mo_l1, mo_c1, mo_o1, mo_h2, mo_l2, mo_c2, mo_o2, mo_h3, mo_l3, mo_c3, mo_o3, mo_h4, mo_l4, mo_c4, mo_o4, mo_h5, mo_l5, mo_c5, mo_o5] = request.security(_rth_ticker, "M", get_monthly_levels(), lookahead=barmerge.lookahead_on)
 
 // All SR computation lives on the 1H chart via get_sr_levels()
 [sr0t, sr0b, sr1t, sr1b, sr2t, sr2b, sr3t, sr3b, sr4t, sr4b,
