@@ -627,6 +627,19 @@ if show_kl and session_open
             array.push(vp, p)
             array.push(vt, array.get(all_t, i))
 
+    // Add hourly 200 SMA as a candidate level (priority 30 — beats all daily levels)
+    if not na(sma200_1h) and sma200_1h > 0.0
+        array.push(vp, sma200_1h)
+        array.push(vt, 30.0)
+
+    // Gap-fill: add round $1 levels within ±$20 of open (priority 0.5 — only survive where no real level exists)
+    float _rn_base = math.floor(open)
+    for _rn = -20 to 20
+        float _rn_p = _rn_base + float(_rn)
+        if _rn_p > 0.0
+            array.push(vp, _rn_p)
+            array.push(vt, 0.5)
+
     int n = array.size(vp)
 
     // Sort by priority DESC, then distance to today's open ASC
@@ -657,8 +670,8 @@ if show_kl and session_open
                     if math.abs(p - array.get(accepted, k)) < kl_min_space
                         ok := false
                         break
-            // Skip levels inside or within $0.10 of today's PM range
-            bool in_pm_zone = not na(pmh) and not na(pml) and p <= pmh + 0.10 and p >= pml - 0.10
+            // Skip levels inside or within $0.25 of today's PM range
+            bool in_pm_zone = not na(pmh) and not na(pml) and p <= pmh + 0.25 and p >= pml - 0.25
             if ok and not in_pm_zone
                 array.push(accepted, p)
 
