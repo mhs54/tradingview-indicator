@@ -67,7 +67,7 @@ warn_sma_dist = input.float(1.0,  "Hourly 200 SMA Warning Distance ($)", group=g
 grp_kl       = "Key Levels"
 show_kl      = input.bool(true,          "Show Key Levels",       group=grp_kl)
 col_kl       = input.color(color.yellow, "Color",                 group=grp_kl)
-kl_min_space = input.float(1.00,         "Min Spacing ($)",       group=grp_kl, minval=0.25, step=0.25)
+kl_min_space = input.float(0.80,         "Min Spacing ($)",       group=grp_kl, minval=0.25, step=0.25)
 
 // =============================================================================
 // INPUTS — SR CHANNELS
@@ -657,8 +657,8 @@ if show_kl and session_open
                     if math.abs(p - array.get(accepted, k)) < kl_min_space
                         ok := false
                         break
-            // Skip levels inside or within $0.25 of today's PM range
-            bool in_pm_zone = not na(pmh) and not na(pml) and p <= pmh + 0.25 and p >= pml - 0.25
+            // Skip levels inside or within $0.10 of today's PM range
+            bool in_pm_zone = not na(pmh) and not na(pml) and p <= pmh + 0.10 and p >= pml - 0.10
             if ok and not in_pm_zone
                 array.push(accepted, p)
 
