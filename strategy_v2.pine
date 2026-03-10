@@ -204,8 +204,10 @@ sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
 sma200_5m  = request.security(syminfo.tickerid, "5",  ta.sma(close, 200))
 sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
 
-// 7 prior days of OHLC for key levels (H=4, L=3, C=2, O=1 priority)
-[kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7] = request.security(syminfo.tickerid, "D", get_daily_levels())
+// 7 prior days of RTH-only OHLC (H=4, L=3, C=2, O=1 priority)
+// ticker.modify forces regular session so high/low/open/close are purely RTH
+string _rth_ticker = ticker.modify(syminfo.tickerid, session=session.regular)
+[kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7] = request.security(_rth_ticker, "D", get_daily_levels())
 
 // All SR computation lives on the 1H chart via get_sr_levels()
 [sr0t, sr0b, sr1t, sr1b, sr2t, sr2b, sr3t, sr3b, sr4t, sr4b,
@@ -653,7 +655,9 @@ if show_kl and session_open
                     if math.abs(p - array.get(accepted, k)) < kl_min_space
                         ok := false
                         break
-            if ok
+            // Skip levels inside today's PM range
+            bool in_pm_zone = not na(pmh) and not na(pml) and p <= pmh and p >= pml
+            if ok and not in_pm_zone
                 array.push(accepted, p)
 
     // Draw a line for each accepted level
