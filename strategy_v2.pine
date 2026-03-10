@@ -206,6 +206,17 @@ get_eth_levels() =>
     [high[1], low[1], high[2], low[2], high[3], low[3], high[4], low[4], high[5], low[5], high[6], low[6], high[7], low[7]]
 
 // =============================================================================
+// MONTHLY LEVELS FUNCTION — returns 5 prior months of OHLC as scalars.
+// Covers deep history for when price revisits levels not seen in months.
+// =============================================================================
+get_monthly_levels() =>
+    [high[1], low[1], close[1], open[1],
+     high[2], low[2], close[2], open[2],
+     high[3], low[3], close[3], open[3],
+     high[4], low[4], close[4], open[4],
+     high[5], low[5], close[5], open[5]]
+
+// =============================================================================
 // SECURITY CALLS
 // =============================================================================
 sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
@@ -221,6 +232,9 @@ string _rth_ticker = ticker.modify(syminfo.tickerid, session=session.regular)
 // Only used where ETH exceeded the RTH range — adds genuine ETH-only levels
 string _eth_ticker = ticker.modify(syminfo.tickerid, session=session.extended)
 [eth_h1, eth_l1, eth_h2, eth_l2, eth_h3, eth_l3, eth_h4, eth_l4, eth_h5, eth_l5, eth_h6, eth_l6, eth_h7, eth_l7] = request.security(_eth_ticker, "D", get_eth_levels())
+
+// 5 prior months of OHLC — deep history for revisiting old levels
+[mo_h1, mo_l1, mo_c1, mo_o1, mo_h2, mo_l2, mo_c2, mo_o2, mo_h3, mo_l3, mo_c3, mo_o3, mo_h4, mo_l4, mo_c4, mo_o4, mo_h5, mo_l5, mo_c5, mo_o5] = request.security(_rth_ticker, "M", get_monthly_levels())
 
 // All SR computation lives on the 1H chart via get_sr_levels()
 [sr0t, sr0b, sr1t, sr1b, sr2t, sr2b, sr3t, sr3b, sr4t, sr4b,
@@ -644,6 +658,19 @@ if show_kl and session_open
     if not na(sma200_1h) and sma200_1h > 0.0
         array.push(vp, sma200_1h)
         array.push(vt, 30.0)
+
+    // Add monthly OHLC levels — deep history (priority 0.8, above ETH, below all daily RTH)
+    float[] _mo_p = array.from(mo_h1, mo_l1, mo_c1, mo_o1, mo_h2, mo_l2, mo_c2, mo_o2, mo_h3, mo_l3, mo_c3, mo_o3, mo_h4, mo_l4, mo_c4, mo_o4, mo_h5, mo_l5, mo_c5, mo_o5)
+    for _mi = 0 to 19
+        float _mp = array.get(_mo_p, _mi)
+        if not na(_mp) and _mp > 0.0
+            array.push(vp, _mp)
+            array.push(vt, 0.8)
+
+    // Add psychological levels ($50 increments: 100, 150, 200 ... 650) (priority 0.5 — lowest)
+    for _ps = 2 to 13
+        array.push(vp, float(_ps) * 50.0)
+        array.push(vt, 0.5)
 
     // Add ETH levels where extended session exceeded RTH range (priority 0.75)
     // eth_hN > kl_hN means premarket or afterhours pushed above RTH high → genuine ETH level
