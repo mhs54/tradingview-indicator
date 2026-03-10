@@ -68,6 +68,7 @@ show_kl      = input.bool(true,          "Show Key Levels",       group=grp_kl)
 col_kl       = input.color(color.yellow, "Color",                 group=grp_kl)
 kl_min_space = input.float(0.80,         "Min Spacing ($)",       group=grp_kl, minval=0.25, step=0.25)
 kl_range     = input.float(15.0,         "Range from PM ($)",     group=grp_kl, minval=5.0,  step=1.0)
+kl_max_gap   = input.float(2.50,         "Max Gap ($)",           group=grp_kl, minval=1.0,  step=0.25)
 
 // =============================================================================
 // KEY LEVELS FUNCTION — returns 7 prior trading days of OHLC as scalars.
@@ -486,12 +487,48 @@ if show_kl and session_open
                     if math.abs(p - array.get(accepted, k)) < kl_min_space
                         ok := false
                         break
-            // Exclude all levels inside or within $0.40 of PM boundaries
-            bool in_pm_zone  = not na(pmh) and not na(pml) and p <= pmh + 0.40 and p >= pml - 0.40
+            // Exclude all levels inside or within $0.50 of PM boundaries
+            bool in_pm_zone  = not na(pmh) and not na(pml) and p <= pmh + 0.50 and p >= pml - 0.50
             // Exclude levels beyond kl_range of PMH (above) or PML (below)
             bool out_of_range = not na(pmh) and not na(pml) and (p > pmh + kl_range or p < pml - kl_range)
             if ok and not in_pm_zone and not out_of_range
                 array.push(accepted, p)
+
+    // Gap-fill pass: if consecutive accepted levels have a gap > kl_max_gap,
+    // rescue the best candidate from the original pool that fits inside the gap.
+    int _gf_sz = array.size(accepted)
+    if _gf_sz >= 2
+        // Sort accepted by price ASC
+        for _bi = 0 to _gf_sz - 2
+            for _bj = 0 to _gf_sz - 2 - _bi
+                if array.get(accepted, _bj) > array.get(accepted, _bj + 1)
+                    float _bt = array.get(accepted, _bj)
+                    array.set(accepted, _bj,     array.get(accepted, _bj + 1))
+                    array.set(accepted, _bj + 1, _bt)
+        float[] gap_fills = array.new_float(0)
+        int _sorted_n = array.size(accepted)
+        for _gi = 0 to _sorted_n - 2
+            float _glo = array.get(accepted, _gi)
+            float _ghi = array.get(accepted, _gi + 1)
+            if _ghi - _glo > kl_max_gap and n > 0
+                for _ci = 0 to n - 1
+                    float _cp = array.get(vp, _ci)
+                    bool _in_pm2 = not na(pmh) and not na(pml) and _cp <= pmh + 0.50 and _cp >= pml - 0.50
+                    if not _in_pm2 and _cp > _glo + 0.40 and _cp < _ghi - 0.40
+                        bool _already = false
+                        int _an2 = array.size(accepted)
+                        if _an2 > 0
+                            for _k2 = 0 to _an2 - 1
+                                if math.abs(_cp - array.get(accepted, _k2)) < 0.05
+                                    _already := true
+                                    break
+                        if not _already
+                            array.push(gap_fills, _cp)
+                        break
+        int _fill_n = array.size(gap_fills)
+        if _fill_n > 0
+            for _fi = 0 to _fill_n - 1
+                array.push(accepted, array.get(gap_fills, _fi))
 
     // Post-process: if two accepted levels are within $0.20 of each other,
     // keep the one closer to today's open (nearer resistance above, nearer support below)
