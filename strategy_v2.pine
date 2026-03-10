@@ -68,12 +68,11 @@ show_kl      = input.bool(true,          "Show Key Levels",       group=grp_kl)
 col_kl       = input.color(color.yellow, "Color",                 group=grp_kl)
 kl_min_space = input.float(0.80,         "Min Spacing ($)",       group=grp_kl, minval=0.25, step=0.25)
 kl_range     = input.float(15.0,         "Range from PM ($)",     group=grp_kl, minval=5.0,  step=1.0)
-kl_max_gap   = input.float(2.50,         "Max Gap ($)",           group=grp_kl, minval=1.0,  step=0.25)
 
 // =============================================================================
-// KEY LEVELS FUNCTION — returns 7 prior trading days of OHLC as scalars.
-// Runs inside request.security("D") so values are always timeframe-consistent.
-// H=4, L=3, C=2, O=1 priority for spacing tie-breaking.
+// KEY LEVELS FUNCTIONS — run inside request.security() for TF consistency.
+// Priority hierarchy: Hourly 200 SMA (50) > $50 psych (40) > Daily H/L (30-17)
+//   > Daily O/C (16-3) > Hourly H/L (2.5-2.1) > ETH H/L (1.5) > Monthly (0.5)
 // =============================================================================
 get_daily_levels() =>
     [high[1], low[1], close[1], open[1],
@@ -104,6 +103,18 @@ get_monthly_levels() =>
      high[5], low[5], close[5], open[5]]
 
 // =============================================================================
+// HOURLY LEVELS FUNCTION — returns 30 prior hourly RTH H/L pairs (~4-5 days).
+// Provides intraday reaction zones missed by daily OHLC.
+// =============================================================================
+get_hourly_levels() =>
+    [high[1],  low[1],  high[2],  low[2],  high[3],  low[3],  high[4],  low[4],  high[5],  low[5],
+     high[6],  low[6],  high[7],  low[7],  high[8],  low[8],  high[9],  low[9],  high[10], low[10],
+     high[11], low[11], high[12], low[12], high[13], low[13], high[14], low[14], high[15], low[15],
+     high[16], low[16], high[17], low[17], high[18], low[18], high[19], low[19], high[20], low[20],
+     high[21], low[21], high[22], low[22], high[23], low[23], high[24], low[24], high[25], low[25],
+     high[26], low[26], high[27], low[27], high[28], low[28], high[29], low[29], high[30], low[30]]
+
+// =============================================================================
 // SECURITY CALLS
 // =============================================================================
 sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
@@ -122,6 +133,9 @@ string _eth_ticker = ticker.modify(syminfo.tickerid, session=session.extended)
 
 // 5 prior months of OHLC — deep history for revisiting old levels
 [mo_h1, mo_l1, mo_c1, mo_o1, mo_h2, mo_l2, mo_c2, mo_o2, mo_h3, mo_l3, mo_c3, mo_o3, mo_h4, mo_l4, mo_c4, mo_o4, mo_h5, mo_l5, mo_c5, mo_o5] = request.security(_rth_ticker, "M", get_monthly_levels(), lookahead=barmerge.lookahead_on)
+
+// 30 prior hourly RTH H/L — intraday reaction zones (~4-5 days of 1H candles)
+[hr_h1, hr_l1, hr_h2, hr_l2, hr_h3, hr_l3, hr_h4, hr_l4, hr_h5, hr_l5, hr_h6, hr_l6, hr_h7, hr_l7, hr_h8, hr_l8, hr_h9, hr_l9, hr_h10, hr_l10, hr_h11, hr_l11, hr_h12, hr_l12, hr_h13, hr_l13, hr_h14, hr_l14, hr_h15, hr_l15, hr_h16, hr_l16, hr_h17, hr_l17, hr_h18, hr_l18, hr_h19, hr_l19, hr_h20, hr_l20, hr_h21, hr_l21, hr_h22, hr_l22, hr_h23, hr_l23, hr_h24, hr_l24, hr_h25, hr_l25, hr_h26, hr_l26, hr_h27, hr_l27, hr_h28, hr_l28, hr_h29, hr_l29, hr_h30, hr_l30] = request.security(_rth_ticker, "60", get_hourly_levels(), lookahead=barmerge.lookahead_on)
 
 // =============================================================================
 // MOVING AVERAGES
@@ -405,27 +419,46 @@ if show_kl and session_open
             line.delete(array.get(kl_lines, i))
     array.clear(kl_lines)
 
-    // All 28 candidates: prices and priorities (H=4, L=3, C=2, O=1 as floats)
-    float[] all_p = array.from(kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7)
-    // Priority: recent days beat older days, H>L>C>O within each day
-    // day1: 28-25, day2: 24-21, day3: 20-17, day4: 16-13, day5: 12-9, day6: 8-5, day7: 4-1
-    float[] all_t = array.from(28.0, 27.0, 26.0, 25.0, 24.0, 23.0, 22.0, 21.0, 20.0, 19.0, 18.0, 17.0, 16.0, 15.0, 14.0, 13.0, 12.0, 11.0, 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0)
-
-    // Filter out na/zero into working arrays
+    // Build candidate pool
     float[] vp = array.new_float(0)
     float[] vt = array.new_float(0)
-    for i = 0 to 27
-        float p = array.get(all_p, i)
-        if not na(p) and p > 0.0
-            array.push(vp, p)
-            array.push(vt, array.get(all_t, i))
 
-    // Add hourly 200 SMA as a candidate level (priority 30 — beats all daily levels)
+    // Daily RTH H/L — priority 30 (day1 H) down to 17 (day7 L). Always beats O/C.
+    float[] _hl_v = array.from(kl_h1, kl_l1, kl_h2, kl_l2, kl_h3, kl_l3, kl_h4, kl_l4, kl_h5, kl_l5, kl_h6, kl_l6, kl_h7, kl_l7)
+    float[] _hl_t = array.from(30.0, 29.0, 28.0, 27.0, 26.0, 25.0, 24.0, 23.0, 22.0, 21.0, 20.0, 19.0, 18.0, 17.0)
+    for _i = 0 to 13
+        float _p = array.get(_hl_v, _i)
+        if not na(_p) and _p > 0.0
+            array.push(vp, _p)
+            array.push(vt, array.get(_hl_t, _i))
+
+    // Daily RTH O/C — priority 16 (day1 O) down to 3 (day7 C).
+    float[] _oc_v = array.from(kl_o1, kl_c1, kl_o2, kl_c2, kl_o3, kl_c3, kl_o4, kl_c4, kl_o5, kl_c5, kl_o6, kl_c6, kl_o7, kl_c7)
+    float[] _oc_t = array.from(16.0, 15.0, 14.0, 13.0, 12.0, 11.0, 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0)
+    for _i = 0 to 13
+        float _p = array.get(_oc_v, _i)
+        if not na(_p) and _p > 0.0
+            array.push(vp, _p)
+            array.push(vt, array.get(_oc_t, _i))
+
+    // Hourly 200 SMA — priority 50 (highest)
     if not na(sma200_1h) and sma200_1h > 0.0
         array.push(vp, sma200_1h)
-        array.push(vt, 30.0)
+        array.push(vt, 50.0)
 
-    // Add monthly OHLC levels — deep history (priority 0.5 — lowest)
+    // Psychological levels ($50 increments) — dynamic range around current price, priority 40
+    float _ps_lo = not na(pml) ? pml - kl_range : open - kl_range
+    float _ps_hi = not na(pmh) ? pmh + kl_range : open + kl_range
+    int   _ps_s  = int(math.ceil(_ps_lo / 50.0))
+    int   _ps_e  = int(math.floor(_ps_hi / 50.0))
+    if _ps_e >= _ps_s
+        for _ps_i = _ps_s to _ps_e
+            float _ps_lvl = float(_ps_i) * 50.0
+            if _ps_lvl > 0.0
+                array.push(vp, _ps_lvl)
+                array.push(vt, 40.0)
+
+    // Monthly OHLC — deep history, priority 0.5 (lowest)
     float[] _mo_p = array.from(mo_h1, mo_l1, mo_c1, mo_o1, mo_h2, mo_l2, mo_c2, mo_o2, mo_h3, mo_l3, mo_c3, mo_o3, mo_h4, mo_l4, mo_c4, mo_o4, mo_h5, mo_l5, mo_c5, mo_o5)
     for _mi = 0 to 19
         float _mp = array.get(_mo_p, _mi)
@@ -433,14 +466,7 @@ if show_kl and session_open
             array.push(vp, _mp)
             array.push(vt, 0.5)
 
-    // Add psychological levels ($50 increments: 100, 150, 200 ... 650) (priority 29 — below hourly 200, above all daily)
-    for _ps = 2 to 13
-        array.push(vp, float(_ps) * 50.0)
-        array.push(vt, 29.0)
-
-    // Add ETH levels where extended session exceeded RTH range (priority 0.75)
-    // eth_hN > kl_hN means premarket or afterhours pushed above RTH high → genuine ETH level
-    // eth_lN < kl_lN means PM or AH pushed below RTH low → genuine ETH level
+    // ETH H/L where extended session exceeded RTH range — priority 1.5
     float[] _eth_h = array.from(eth_h1, eth_h2, eth_h3, eth_h4, eth_h5, eth_h6, eth_h7)
     float[] _eth_l = array.from(eth_l1, eth_l2, eth_l3, eth_l4, eth_l5, eth_l6, eth_l7)
     float[] _rth_h = array.from(kl_h1, kl_h2, kl_h3, kl_h4, kl_h5, kl_h6, kl_h7)
@@ -452,10 +478,24 @@ if show_kl and session_open
         float _rl = array.get(_rth_l, _ei)
         if not na(_eh) and not na(_rh) and _eh > _rh + 0.01
             array.push(vp, _eh)
-            array.push(vt, 0.75)
+            array.push(vt, 1.5)
         if not na(_el) and not na(_rl) and _el < _rl - 0.01
             array.push(vp, _el)
-            array.push(vt, 0.75)
+            array.push(vt, 1.5)
+
+    // Hourly RTH H/L — intraday reaction zones, priority 2.5-2.1 by recency group
+    float[] _hr_h = array.from(hr_h1, hr_h2, hr_h3, hr_h4, hr_h5, hr_h6, hr_h7, hr_h8, hr_h9, hr_h10, hr_h11, hr_h12, hr_h13, hr_h14, hr_h15, hr_h16, hr_h17, hr_h18, hr_h19, hr_h20, hr_h21, hr_h22, hr_h23, hr_h24, hr_h25, hr_h26, hr_h27, hr_h28, hr_h29, hr_h30)
+    float[] _hr_l = array.from(hr_l1, hr_l2, hr_l3, hr_l4, hr_l5, hr_l6, hr_l7, hr_l8, hr_l9, hr_l10, hr_l11, hr_l12, hr_l13, hr_l14, hr_l15, hr_l16, hr_l17, hr_l18, hr_l19, hr_l20, hr_l21, hr_l22, hr_l23, hr_l24, hr_l25, hr_l26, hr_l27, hr_l28, hr_l29, hr_l30)
+    for _hi = 0 to 29
+        float _hh = array.get(_hr_h, _hi)
+        float _hl = array.get(_hr_l, _hi)
+        float _hp = _hi < 7 ? 2.5 : _hi < 14 ? 2.4 : _hi < 21 ? 2.3 : _hi < 28 ? 2.2 : 2.1
+        if not na(_hh) and _hh > 0.0
+            array.push(vp, _hh)
+            array.push(vt, _hp)
+        if not na(_hl) and _hl > 0.0
+            array.push(vp, _hl)
+            array.push(vt, _hp)
 
     int n = array.size(vp)
 
@@ -494,71 +534,12 @@ if show_kl and session_open
             if ok and not in_pm_zone and not out_of_range
                 array.push(accepted, p)
 
-    // Gap-fill pass: if consecutive accepted levels have a gap > kl_max_gap,
-    // rescue the best candidate from the original pool that fits inside the gap.
-    int _gf_sz = array.size(accepted)
-    if _gf_sz >= 2
-        // Sort accepted by price ASC
-        for _bi = 0 to _gf_sz - 2
-            for _bj = 0 to _gf_sz - 2 - _bi
-                if array.get(accepted, _bj) > array.get(accepted, _bj + 1)
-                    float _bt = array.get(accepted, _bj)
-                    array.set(accepted, _bj,     array.get(accepted, _bj + 1))
-                    array.set(accepted, _bj + 1, _bt)
-        float[] gap_fills = array.new_float(0)
-        int _sorted_n = array.size(accepted)
-        for _gi = 0 to _sorted_n - 2
-            float _glo = array.get(accepted, _gi)
-            float _ghi = array.get(accepted, _gi + 1)
-            if _ghi - _glo > kl_max_gap and n > 0
-                for _ci = 0 to n - 1
-                    float _cp = array.get(vp, _ci)
-                    bool _in_pm2 = not na(pmh) and not na(pml) and _cp <= pmh + 0.50 and _cp >= pml - 0.50
-                    if not _in_pm2 and _cp > _glo + 0.40 and _cp < _ghi - 0.40
-                        bool _already = false
-                        int _an2 = array.size(accepted)
-                        if _an2 > 0
-                            for _k2 = 0 to _an2 - 1
-                                if math.abs(_cp - array.get(accepted, _k2)) < 0.05
-                                    _already := true
-                                    break
-                        if not _already
-                            array.push(gap_fills, _cp)
-                        break
-        int _fill_n = array.size(gap_fills)
-        if _fill_n > 0
-            for _fi = 0 to _fill_n - 1
-                array.push(accepted, array.get(gap_fills, _fi))
-
-    // Post-process: if two accepted levels are within $0.20 of each other,
-    // keep the one closer to today's open (nearer resistance above, nearer support below)
-    float[] final_levels = array.new_float(0)
-    int ac_n = array.size(accepted)
-    if ac_n > 0
-        for i = 0 to ac_n - 1
-            float pi      = array.get(accepted, i)
-            bool dominated = false
-            for j = 0 to ac_n - 1
-                if i != j
-                    float pj = array.get(accepted, j)
-                    if math.abs(pi - pj) < 0.20
-                        bool both_above = pi > open and pj > open
-                        bool both_below = pi < open and pj < open
-                        if both_above and pi > pj
-                            dominated := true
-                            break
-                        if both_below and pi < pj
-                            dominated := true
-                            break
-            if not dominated
-                array.push(final_levels, pi)
-
-    // Draw a line for each final level
+    // Draw a line for each accepted level
     int hist_x = math.max(0, bar_index - 2000)
-    int na_cnt = array.size(final_levels)
+    int na_cnt = array.size(accepted)
     if na_cnt > 0
         for i = 0 to na_cnt - 1
-            float lvl = array.get(final_levels, i)
+            float lvl = array.get(accepted, i)
             array.push(kl_lines, line.new(hist_x, lvl, bar_index, lvl,
                  extend=extend.right, color=col_kl, width=1, style=line.style_solid))
 
