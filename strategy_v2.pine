@@ -198,6 +198,14 @@ get_daily_levels() =>
      high[7], low[7], close[7], open[7]]
 
 // =============================================================================
+// ETH LEVELS FUNCTION — returns 7 prior days of extended session H/L.
+// Extended session includes premarket and afterhours.
+// Only candidates where ETH exceeded the RTH range will be added.
+// =============================================================================
+get_eth_levels() =>
+    [high[1], low[1], high[2], low[2], high[3], low[3], high[4], low[4], high[5], low[5], high[6], low[6], high[7], low[7]]
+
+// =============================================================================
 // SECURITY CALLS
 // =============================================================================
 sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
@@ -208,6 +216,11 @@ sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
 // ticker.modify forces regular session so high/low/open/close are purely RTH
 string _rth_ticker = ticker.modify(syminfo.tickerid, session=session.regular)
 [kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7] = request.security(_rth_ticker, "D", get_daily_levels())
+
+// 7 prior days of extended session H/L (premarket + afterhours)
+// Only used where ETH exceeded the RTH range — adds genuine ETH-only levels
+string _eth_ticker = ticker.modify(syminfo.tickerid, session=session.extended)
+[eth_h1, eth_l1, eth_h2, eth_l2, eth_h3, eth_l3, eth_h4, eth_l4, eth_h5, eth_l5, eth_h6, eth_l6, eth_h7, eth_l7] = request.security(_eth_ticker, "D", get_eth_levels())
 
 // All SR computation lives on the 1H chart via get_sr_levels()
 [sr0t, sr0b, sr1t, sr1b, sr2t, sr2b, sr3t, sr3b, sr4t, sr4b,
@@ -632,13 +645,24 @@ if show_kl and session_open
         array.push(vp, sma200_1h)
         array.push(vt, 30.0)
 
-    // Gap-fill: add round $1 levels within ±$20 of open (priority 0.5 — only survive where no real level exists)
-    float _rn_base = math.floor(open)
-    for _rn = -20 to 20
-        float _rn_p = _rn_base + float(_rn)
-        if _rn_p > 0.0
-            array.push(vp, _rn_p)
-            array.push(vt, 0.5)
+    // Add ETH levels where extended session exceeded RTH range (priority 0.75)
+    // eth_hN > kl_hN means premarket or afterhours pushed above RTH high → genuine ETH level
+    // eth_lN < kl_lN means PM or AH pushed below RTH low → genuine ETH level
+    float[] _eth_h = array.from(eth_h1, eth_h2, eth_h3, eth_h4, eth_h5, eth_h6, eth_h7)
+    float[] _eth_l = array.from(eth_l1, eth_l2, eth_l3, eth_l4, eth_l5, eth_l6, eth_l7)
+    float[] _rth_h = array.from(kl_h1, kl_h2, kl_h3, kl_h4, kl_h5, kl_h6, kl_h7)
+    float[] _rth_l = array.from(kl_l1, kl_l2, kl_l3, kl_l4, kl_l5, kl_l6, kl_l7)
+    for _ei = 0 to 6
+        float _eh = array.get(_eth_h, _ei)
+        float _el = array.get(_eth_l, _ei)
+        float _rh = array.get(_rth_h, _ei)
+        float _rl = array.get(_rth_l, _ei)
+        if not na(_eh) and not na(_rh) and _eh > _rh + 0.01
+            array.push(vp, _eh)
+            array.push(vt, 0.75)
+        if not na(_el) and not na(_rl) and _el < _rl - 0.01
+            array.push(vp, _el)
+            array.push(vt, 0.75)
 
     int n = array.size(vp)
 
