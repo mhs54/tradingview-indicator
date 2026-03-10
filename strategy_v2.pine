@@ -604,8 +604,10 @@ var line[] kl_lines = array.new_line(0)
 
 if show_kl and session_open
     // Delete previous day's lines
-    for i = 0 to array.size(kl_lines) - 1
-        line.delete(array.get(kl_lines, i))
+    int kl_prev = array.size(kl_lines)
+    if kl_prev > 0
+        for i = 0 to kl_prev - 1
+            line.delete(array.get(kl_lines, i))
     array.clear(kl_lines)
 
     // All 28 candidates: prices and priorities (H=4, L=3, C=2, O=1 as floats)
