@@ -205,11 +205,7 @@ sma200_5m  = request.security(syminfo.tickerid, "5",  ta.sma(close, 200))
 sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
 
 // 7 prior days of OHLC for key levels (H=4, L=3, C=2, O=1 priority)
-[kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2,
- kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4,
- kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6,
- kl_h7, kl_l7, kl_c7, kl_o7] =
-    request.security(syminfo.tickerid, "D", get_daily_levels())
+[kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7] = request.security(syminfo.tickerid, "D", get_daily_levels())
 
 // All SR computation lives on the 1H chart via get_sr_levels()
 [sr0t, sr0b, sr1t, sr1b, sr2t, sr2b, sr3t, sr3b, sr4t, sr4b,
@@ -612,22 +608,13 @@ if show_kl and session_open
         line.delete(array.get(kl_lines, i))
     array.clear(kl_lines)
 
-    // All 28 candidates (7 days × H/L/C/O) and their type priorities
-    float[] all_p = array.from(
-         kl_h1, kl_l1, kl_c1, kl_o1,
-         kl_h2, kl_l2, kl_c2, kl_o2,
-         kl_h3, kl_l3, kl_c3, kl_o3,
-         kl_h4, kl_l4, kl_c4, kl_o4,
-         kl_h5, kl_l5, kl_c5, kl_o5,
-         kl_h6, kl_l6, kl_c6, kl_o6,
-         kl_h7, kl_l7, kl_c7, kl_o7)
-    int[] all_t = array.from(
-         4, 3, 2, 1,  4, 3, 2, 1,  4, 3, 2, 1,  4, 3, 2, 1,
-         4, 3, 2, 1,  4, 3, 2, 1,  4, 3, 2, 1)
+    // All 28 candidates: prices and priorities (H=4, L=3, C=2, O=1 as floats)
+    float[] all_p = array.from(kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7)
+    float[] all_t = array.from(4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0, 4.0, 3.0, 2.0, 1.0)
 
     // Filter out na/zero into working arrays
     float[] vp = array.new_float(0)
-    int[]   vt = array.new_int(0)
+    float[] vt = array.new_float(0)
     for i = 0 to 27
         float p = array.get(all_p, i)
         if not na(p) and p > 0.0
@@ -640,13 +627,13 @@ if show_kl and session_open
     if n >= 2
         for i = 0 to n - 2
             for j = 0 to n - 2 - i
-                int   pi = array.get(vt, j)
-                int   pj = array.get(vt, j + 1)
+                float pi = array.get(vt, j)
+                float pj = array.get(vt, j + 1)
                 float di = math.abs(array.get(vp, j)     - open)
                 float dj = math.abs(array.get(vp, j + 1) - open)
                 if pi < pj or (pi == pj and di > dj)
                     float tp = array.get(vp, j)
-                    int   tt = array.get(vt, j)
+                    float tt = array.get(vt, j)
                     array.set(vp, j,     array.get(vp, j + 1))
                     array.set(vt, j,     array.get(vt, j + 1))
                     array.set(vp, j + 1, tp)
