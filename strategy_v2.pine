@@ -60,6 +60,7 @@ show_or = input.bool(true, "Show Opening Range (9:30–9:45)", group=grp_or)
 grp_pc        = "Patience Candle"
 show_pc       = input.bool(true,  "Show Patience Candle Arrows",         group=grp_pc)
 warn_sma_dist = input.float(1.0,  "Hourly 200 SMA Warning Distance ($)", group=grp_pc, minval=0.1, step=0.25)
+push_notif    = input.bool(false, "Push Notifications",                  group=grp_pc)
 
 // =============================================================================
 // INPUTS — KEY LEVELS
@@ -579,6 +580,18 @@ if show_sr and session_close
         if not na(array.get(sr_bot, x))
             line.set_extend(array.get(sr_bot, x), extend.none)
             line.set_x2(array.get(sr_bot, x), bar_index)
+
+// =============================================================================
+// PUSH NOTIFICATIONS — fires via "Any alert() function call" alert in TV UI
+// =============================================================================
+bool pc_long_new  = pc_long_valid  and not pc_long_valid[1]
+bool pc_short_new = pc_short_valid and not pc_short_valid[1]
+
+if push_notif and pc_long_new
+    alert(syminfo.ticker + " " + timeframe.period + "m — LONG PC formed. Entry above " + str.tostring(high, "#.##") + ", stop below " + str.tostring(low, "#.##"), alert.freq_once_per_bar)
+
+if push_notif and pc_short_new
+    alert(syminfo.ticker + " " + timeframe.period + "m — SHORT PC formed. Entry below " + str.tostring(low, "#.##") + ", stop above " + str.tostring(high, "#.##"), alert.freq_once_per_bar)
 
 // =============================================================================
 // ALERTS
