@@ -67,7 +67,8 @@ grp_kl       = "Key Levels"
 show_kl      = input.bool(true,          "Show Key Levels",       group=grp_kl)
 col_kl       = input.color(color.yellow, "Color",                 group=grp_kl)
 kl_min_space = input.float(0.80,         "Min Spacing ($)",       group=grp_kl, minval=0.25, step=0.25)
-kl_range     = input.float(15.0,         "Range from PM ($)",     group=grp_kl, minval=5.0,  step=1.0)
+kl_adr_mult  = input.float(1.0,          "ADR Multiplier",        group=grp_kl, minval=0.5, maxval=3.0, step=0.1,
+     tooltip="Range shown = this multiplier × 14-day avg daily range. 1.0 = one typical day's move per side. Increase for wider stocks or volatile conditions.")
 
 // =============================================================================
 // KEY LEVELS FUNCTIONS — run inside request.security() for TF consistency.
@@ -426,6 +427,20 @@ if show_kl and session_open
         for i = 0 to kl_prev - 1
             line.delete(array.get(kl_lines, i))
     array.clear(kl_lines)
+
+    // Compute ADR — average RTH daily range over the last 10 days
+    float _adr_sum = 0.0
+    int   _adr_cnt = 0
+    float[] _adr_h = array.from(kl_h1, kl_h2, kl_h3, kl_h4, kl_h5, kl_h6, kl_h7, kl_h8, kl_h9, kl_h10)
+    float[] _adr_l = array.from(kl_l1, kl_l2, kl_l3, kl_l4, kl_l5, kl_l6, kl_l7, kl_l8, kl_l9, kl_l10)
+    for _ai = 0 to 9
+        float _ah = array.get(_adr_h, _ai)
+        float _al = array.get(_adr_l, _ai)
+        if not na(_ah) and not na(_al) and _ah > _al
+            _adr_sum += _ah - _al
+            _adr_cnt += 1
+    float _adr          = _adr_cnt > 0 ? _adr_sum / _adr_cnt : 15.0
+    float kl_range      = kl_adr_mult * _adr
 
     // Build candidate pool
     float[] vp = array.new_float(0)
