@@ -114,18 +114,16 @@ get_monthly_levels() =>
 // Provides intraday reaction zones missed by daily OHLC.
 // =============================================================================
 get_hourly_levels() =>
-    [high[1],  low[1],  high[2],  low[2],  high[3],  low[3],  high[4],  low[4],  high[5],  low[5],
-     high[6],  low[6],  high[7],  low[7],  high[8],  low[8],  high[9],  low[9],  high[10], low[10],
-     high[11], low[11], high[12], low[12], high[13], low[13], high[14], low[14], high[15], low[15],
-     high[16], low[16], high[17], low[17], high[18], low[18], high[19], low[19], high[20], low[20],
-     high[21], low[21], high[22], low[22], high[23], low[23], high[24], low[24], high[25], low[25],
-     high[26], low[26], high[27], low[27], high[28], low[28], high[29], low[29], high[30], low[30],
-     high[31], low[31], high[32], low[32], high[33], low[33], high[34], low[34], high[35], low[35],
-     high[36], low[36], high[37], low[37], high[38], low[38], high[39], low[39], high[40], low[40],
-     high[41], low[41], high[42], low[42], high[43], low[43], high[44], low[44], high[45], low[45],
-     high[46], low[46], high[47], low[47], high[48], low[48], high[49], low[49], high[50], low[50],
-     high[51], low[51], high[52], low[52], high[53], low[53], high[54], low[54], high[55], low[55],
-     high[56], low[56], high[57], low[57], high[58], low[58], high[59], low[59], high[60], low[60]]
+    [high[1],  low[1],  open[1],  close[1],  high[2],  low[2],  open[2],  close[2],  high[3],  low[3],  open[3],  close[3],
+     high[4],  low[4],  open[4],  close[4],  high[5],  low[5],  open[5],  close[5],  high[6],  low[6],  open[6],  close[6],
+     high[7],  low[7],  open[7],  close[7],  high[8],  low[8],  open[8],  close[8],  high[9],  low[9],  open[9],  close[9],
+     high[10], low[10], open[10], close[10], high[11], low[11], open[11], close[11], high[12], low[12], open[12], close[12],
+     high[13], low[13], open[13], close[13], high[14], low[14], open[14], close[14], high[15], low[15], open[15], close[15],
+     high[16], low[16], open[16], close[16], high[17], low[17], open[17], close[17], high[18], low[18], open[18], close[18],
+     high[19], low[19], open[19], close[19], high[20], low[20], open[20], close[20], high[21], low[21], open[21], close[21],
+     high[22], low[22], open[22], close[22], high[23], low[23], open[23], close[23], high[24], low[24], open[24], close[24],
+     high[25], low[25], open[25], close[25], high[26], low[26], open[26], close[26], high[27], low[27], open[27], close[27],
+     high[28], low[28], open[28], close[28], high[29], low[29], open[29], close[29], high[30], low[30], open[30], close[30]]
 
 // =============================================================================
 // SECURITY CALLS
@@ -148,8 +146,17 @@ string _eth_ticker = ticker.modify(syminfo.tickerid, session=session.extended)
 // 5 prior months of OHLC — deep history for revisiting old levels
 [mo_h1, mo_l1, mo_c1, mo_o1, mo_h2, mo_l2, mo_c2, mo_o2, mo_h3, mo_l3, mo_c3, mo_o3, mo_h4, mo_l4, mo_c4, mo_o4, mo_h5, mo_l5, mo_c5, mo_o5] = request.security(_rth_ticker, "M", get_monthly_levels(), lookahead=barmerge.lookahead_on)
 
-// 60 prior hourly RTH H/L — intraday reaction zones (~8-9 days of 1H candles)
-[hr_h1, hr_l1, hr_h2, hr_l2, hr_h3, hr_l3, hr_h4, hr_l4, hr_h5, hr_l5, hr_h6, hr_l6, hr_h7, hr_l7, hr_h8, hr_l8, hr_h9, hr_l9, hr_h10, hr_l10, hr_h11, hr_l11, hr_h12, hr_l12, hr_h13, hr_l13, hr_h14, hr_l14, hr_h15, hr_l15, hr_h16, hr_l16, hr_h17, hr_l17, hr_h18, hr_l18, hr_h19, hr_l19, hr_h20, hr_l20, hr_h21, hr_l21, hr_h22, hr_l22, hr_h23, hr_l23, hr_h24, hr_l24, hr_h25, hr_l25, hr_h26, hr_l26, hr_h27, hr_l27, hr_h28, hr_l28, hr_h29, hr_l29, hr_h30, hr_l30, hr_h31, hr_l31, hr_h32, hr_l32, hr_h33, hr_l33, hr_h34, hr_l34, hr_h35, hr_l35, hr_h36, hr_l36, hr_h37, hr_l37, hr_h38, hr_l38, hr_h39, hr_l39, hr_h40, hr_l40, hr_h41, hr_l41, hr_h42, hr_l42, hr_h43, hr_l43, hr_h44, hr_l44, hr_h45, hr_l45, hr_h46, hr_l46, hr_h47, hr_l47, hr_h48, hr_l48, hr_h49, hr_l49, hr_h50, hr_l50, hr_h51, hr_l51, hr_h52, hr_l52, hr_h53, hr_l53, hr_h54, hr_l54, hr_h55, hr_l55, hr_h56, hr_l56, hr_h57, hr_l57, hr_h58, hr_l58, hr_h59, hr_l59, hr_h60, hr_l60] = request.security(_rth_ticker, "60", get_hourly_levels(), lookahead=barmerge.lookahead_on)
+// 30 prior hourly RTH OHLC — intraday reaction zones (~4-5 days of 1H candles)
+[hr_h1,  hr_l1,  hr_o1,  hr_c1,  hr_h2,  hr_l2,  hr_o2,  hr_c2,  hr_h3,  hr_l3,  hr_o3,  hr_c3,
+ hr_h4,  hr_l4,  hr_o4,  hr_c4,  hr_h5,  hr_l5,  hr_o5,  hr_c5,  hr_h6,  hr_l6,  hr_o6,  hr_c6,
+ hr_h7,  hr_l7,  hr_o7,  hr_c7,  hr_h8,  hr_l8,  hr_o8,  hr_c8,  hr_h9,  hr_l9,  hr_o9,  hr_c9,
+ hr_h10, hr_l10, hr_o10, hr_c10, hr_h11, hr_l11, hr_o11, hr_c11, hr_h12, hr_l12, hr_o12, hr_c12,
+ hr_h13, hr_l13, hr_o13, hr_c13, hr_h14, hr_l14, hr_o14, hr_c14, hr_h15, hr_l15, hr_o15, hr_c15,
+ hr_h16, hr_l16, hr_o16, hr_c16, hr_h17, hr_l17, hr_o17, hr_c17, hr_h18, hr_l18, hr_o18, hr_c18,
+ hr_h19, hr_l19, hr_o19, hr_c19, hr_h20, hr_l20, hr_o20, hr_c20, hr_h21, hr_l21, hr_o21, hr_c21,
+ hr_h22, hr_l22, hr_o22, hr_c22, hr_h23, hr_l23, hr_o23, hr_c23, hr_h24, hr_l24, hr_o24, hr_c24,
+ hr_h25, hr_l25, hr_o25, hr_c25, hr_h26, hr_l26, hr_o26, hr_c26, hr_h27, hr_l27, hr_o27, hr_c27,
+ hr_h28, hr_l28, hr_o28, hr_c28, hr_h29, hr_l29, hr_o29, hr_c29, hr_h30, hr_l30, hr_o30, hr_c30] = request.security(_rth_ticker, "60", get_hourly_levels(), lookahead=barmerge.lookahead_on)
 
 // =============================================================================
 // MOVING AVERAGES
@@ -516,19 +523,19 @@ if show_kl and session_open
             array.push(vp, _el)
             array.push(vt, 1.5)
 
-    // Hourly RTH H/L — intraday reaction zones, priority 2.5-1.7 by recency group (~7 bars/day)
-    float[] _hr_h = array.from(hr_h1, hr_h2, hr_h3, hr_h4, hr_h5, hr_h6, hr_h7, hr_h8, hr_h9, hr_h10, hr_h11, hr_h12, hr_h13, hr_h14, hr_h15, hr_h16, hr_h17, hr_h18, hr_h19, hr_h20, hr_h21, hr_h22, hr_h23, hr_h24, hr_h25, hr_h26, hr_h27, hr_h28, hr_h29, hr_h30, hr_h31, hr_h32, hr_h33, hr_h34, hr_h35, hr_h36, hr_h37, hr_h38, hr_h39, hr_h40, hr_h41, hr_h42, hr_h43, hr_h44, hr_h45, hr_h46, hr_h47, hr_h48, hr_h49, hr_h50, hr_h51, hr_h52, hr_h53, hr_h54, hr_h55, hr_h56, hr_h57, hr_h58, hr_h59, hr_h60)
-    float[] _hr_l = array.from(hr_l1, hr_l2, hr_l3, hr_l4, hr_l5, hr_l6, hr_l7, hr_l8, hr_l9, hr_l10, hr_l11, hr_l12, hr_l13, hr_l14, hr_l15, hr_l16, hr_l17, hr_l18, hr_l19, hr_l20, hr_l21, hr_l22, hr_l23, hr_l24, hr_l25, hr_l26, hr_l27, hr_l28, hr_l29, hr_l30, hr_l31, hr_l32, hr_l33, hr_l34, hr_l35, hr_l36, hr_l37, hr_l38, hr_l39, hr_l40, hr_l41, hr_l42, hr_l43, hr_l44, hr_l45, hr_l46, hr_l47, hr_l48, hr_l49, hr_l50, hr_l51, hr_l52, hr_l53, hr_l54, hr_l55, hr_l56, hr_l57, hr_l58, hr_l59, hr_l60)
-    for _hi = 0 to 59
-        float _hh = array.get(_hr_h, _hi)
-        float _hl = array.get(_hr_l, _hi)
-        float _hp = _hi < 7 ? 2.5 : _hi < 14 ? 2.4 : _hi < 21 ? 2.3 : _hi < 28 ? 2.2 : _hi < 35 ? 2.1 : _hi < 42 ? 2.0 : _hi < 49 ? 1.9 : _hi < 56 ? 1.8 : 1.7
-        if not na(_hh) and _hh > 0.0
-            array.push(vp, _hh)
-            array.push(vt, _hp)
-        if not na(_hl) and _hl > 0.0
-            array.push(vp, _hl)
-            array.push(vt, _hp)
+    // Hourly RTH OHLC — intraday reaction zones, priority 2.5-1.7 by recency (~7 bars/day)
+    float[] _hr_h = array.from(hr_h1, hr_h2, hr_h3, hr_h4, hr_h5, hr_h6, hr_h7, hr_h8, hr_h9, hr_h10, hr_h11, hr_h12, hr_h13, hr_h14, hr_h15, hr_h16, hr_h17, hr_h18, hr_h19, hr_h20, hr_h21, hr_h22, hr_h23, hr_h24, hr_h25, hr_h26, hr_h27, hr_h28, hr_h29, hr_h30)
+    float[] _hr_l = array.from(hr_l1, hr_l2, hr_l3, hr_l4, hr_l5, hr_l6, hr_l7, hr_l8, hr_l9, hr_l10, hr_l11, hr_l12, hr_l13, hr_l14, hr_l15, hr_l16, hr_l17, hr_l18, hr_l19, hr_l20, hr_l21, hr_l22, hr_l23, hr_l24, hr_l25, hr_l26, hr_l27, hr_l28, hr_l29, hr_l30)
+    float[] _hr_o = array.from(hr_o1, hr_o2, hr_o3, hr_o4, hr_o5, hr_o6, hr_o7, hr_o8, hr_o9, hr_o10, hr_o11, hr_o12, hr_o13, hr_o14, hr_o15, hr_o16, hr_o17, hr_o18, hr_o19, hr_o20, hr_o21, hr_o22, hr_o23, hr_o24, hr_o25, hr_o26, hr_o27, hr_o28, hr_o29, hr_o30)
+    float[] _hr_c = array.from(hr_c1, hr_c2, hr_c3, hr_c4, hr_c5, hr_c6, hr_c7, hr_c8, hr_c9, hr_c10, hr_c11, hr_c12, hr_c13, hr_c14, hr_c15, hr_c16, hr_c17, hr_c18, hr_c19, hr_c20, hr_c21, hr_c22, hr_c23, hr_c24, hr_c25, hr_c26, hr_c27, hr_c28, hr_c29, hr_c30)
+    for _hi = 0 to 29
+        float _hp = _hi < 7 ? 2.5 : _hi < 14 ? 2.4 : _hi < 21 ? 2.3 : 2.2
+        float[4] _vals = array.from(array.get(_hr_h, _hi), array.get(_hr_l, _hi), array.get(_hr_o, _hi), array.get(_hr_c, _hi))
+        for _vi = 0 to 3
+            float _v = array.get(_vals, _vi)
+            if not na(_v) and _v > 0.0
+                array.push(vp, _v)
+                array.push(vt, _hp)
 
     int n = array.size(vp)
 
