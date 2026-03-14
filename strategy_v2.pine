@@ -128,6 +128,24 @@ get_hourly_levels() =>
      high[56], low[56], high[57], low[57], high[58], low[58], high[59], low[59], high[60], low[60]]
 
 // =============================================================================
+// HOURLY OC LEVELS FUNCTION — returns 60 prior hourly RTH C/O pairs.
+// Separate call to stay within Pine Script's 128-element tuple limit.
+// =============================================================================
+get_hourly_oc_levels() =>
+    [close[1],  open[1],  close[2],  open[2],  close[3],  open[3],  close[4],  open[4],  close[5],  open[5],
+     close[6],  open[6],  close[7],  open[7],  close[8],  open[8],  close[9],  open[9],  close[10], open[10],
+     close[11], open[11], close[12], open[12], close[13], open[13], close[14], open[14], close[15], open[15],
+     close[16], open[16], close[17], open[17], close[18], open[18], close[19], open[19], close[20], open[20],
+     close[21], open[21], close[22], open[22], close[23], open[23], close[24], open[24], close[25], open[25],
+     close[26], open[26], close[27], open[27], close[28], open[28], close[29], open[29], close[30], open[30],
+     close[31], open[31], close[32], open[32], close[33], open[33], close[34], open[34], close[35], open[35],
+     close[36], open[36], close[37], open[37], close[38], open[38], close[39], open[39], close[40], open[40],
+     close[41], open[41], close[42], open[42], close[43], open[43], close[44], open[44], close[45], open[45],
+     close[46], open[46], close[47], open[47], close[48], open[48], close[49], open[49], close[50], open[50],
+     close[51], open[51], close[52], open[52], close[53], open[53], close[54], open[54], close[55], open[55],
+     close[56], open[56], close[57], open[57], close[58], open[58], close[59], open[59], close[60], open[60]]
+
+// =============================================================================
 // SECURITY CALLS
 // =============================================================================
 sma200_1h  = request.security(syminfo.tickerid, "60", ta.sma(close, 200))
@@ -147,6 +165,9 @@ string _eth_ticker = ticker.modify(syminfo.tickerid, session=session.extended)
 
 // 60 prior hourly RTH H/L — intraday reaction zones (~8-9 days of 1H candles)
 [hr_h1, hr_l1, hr_h2, hr_l2, hr_h3, hr_l3, hr_h4, hr_l4, hr_h5, hr_l5, hr_h6, hr_l6, hr_h7, hr_l7, hr_h8, hr_l8, hr_h9, hr_l9, hr_h10, hr_l10, hr_h11, hr_l11, hr_h12, hr_l12, hr_h13, hr_l13, hr_h14, hr_l14, hr_h15, hr_l15, hr_h16, hr_l16, hr_h17, hr_l17, hr_h18, hr_l18, hr_h19, hr_l19, hr_h20, hr_l20, hr_h21, hr_l21, hr_h22, hr_l22, hr_h23, hr_l23, hr_h24, hr_l24, hr_h25, hr_l25, hr_h26, hr_l26, hr_h27, hr_l27, hr_h28, hr_l28, hr_h29, hr_l29, hr_h30, hr_l30, hr_h31, hr_l31, hr_h32, hr_l32, hr_h33, hr_l33, hr_h34, hr_l34, hr_h35, hr_l35, hr_h36, hr_l36, hr_h37, hr_l37, hr_h38, hr_l38, hr_h39, hr_l39, hr_h40, hr_l40, hr_h41, hr_l41, hr_h42, hr_l42, hr_h43, hr_l43, hr_h44, hr_l44, hr_h45, hr_l45, hr_h46, hr_l46, hr_h47, hr_l47, hr_h48, hr_l48, hr_h49, hr_l49, hr_h50, hr_l50, hr_h51, hr_l51, hr_h52, hr_l52, hr_h53, hr_l53, hr_h54, hr_l54, hr_h55, hr_l55, hr_h56, hr_l56, hr_h57, hr_l57, hr_h58, hr_l58, hr_h59, hr_l59, hr_h60, hr_l60] = request.security(_rth_ticker, "60", get_hourly_levels(), lookahead=barmerge.lookahead_on)
+
+// 60 prior hourly RTH C/O — second call to stay within 128-element tuple limit
+[hr_c1, hr_o1, hr_c2, hr_o2, hr_c3, hr_o3, hr_c4, hr_o4, hr_c5, hr_o5, hr_c6, hr_o6, hr_c7, hr_o7, hr_c8, hr_o8, hr_c9, hr_o9, hr_c10, hr_o10, hr_c11, hr_o11, hr_c12, hr_o12, hr_c13, hr_o13, hr_c14, hr_o14, hr_c15, hr_o15, hr_c16, hr_o16, hr_c17, hr_o17, hr_c18, hr_o18, hr_c19, hr_o19, hr_c20, hr_o20, hr_c21, hr_o21, hr_c22, hr_o22, hr_c23, hr_o23, hr_c24, hr_o24, hr_c25, hr_o25, hr_c26, hr_o26, hr_c27, hr_o27, hr_c28, hr_o28, hr_c29, hr_o29, hr_c30, hr_o30, hr_c31, hr_o31, hr_c32, hr_o32, hr_c33, hr_o33, hr_c34, hr_o34, hr_c35, hr_o35, hr_c36, hr_o36, hr_c37, hr_o37, hr_c38, hr_o38, hr_c39, hr_o39, hr_c40, hr_o40, hr_c41, hr_o41, hr_c42, hr_o42, hr_c43, hr_o43, hr_c44, hr_o44, hr_c45, hr_o45, hr_c46, hr_o46, hr_c47, hr_o47, hr_c48, hr_o48, hr_c49, hr_o49, hr_c50, hr_o50, hr_c51, hr_o51, hr_c52, hr_o52, hr_c53, hr_o53, hr_c54, hr_o54, hr_c55, hr_o55, hr_c56, hr_o56, hr_c57, hr_o57, hr_c58, hr_o58, hr_c59, hr_o59, hr_c60, hr_o60] = request.security(_rth_ticker, "60", get_hourly_oc_levels(), lookahead=barmerge.lookahead_on)
 
 // =============================================================================
 // MOVING AVERAGES
@@ -508,18 +529,28 @@ if show_kl and session_open
             array.push(vp, _el)
             array.push(vt, 1.5)
 
-    // Hourly RTH H/L — intraday reaction zones, priority 2.5-1.7 by recency group (~7 bars/day)
+    // Hourly RTH OHLC — intraday reaction zones, priority 2.5-1.7 by recency group (~7 bars/day)
     float[] _hr_h = array.from(hr_h1, hr_h2, hr_h3, hr_h4, hr_h5, hr_h6, hr_h7, hr_h8, hr_h9, hr_h10, hr_h11, hr_h12, hr_h13, hr_h14, hr_h15, hr_h16, hr_h17, hr_h18, hr_h19, hr_h20, hr_h21, hr_h22, hr_h23, hr_h24, hr_h25, hr_h26, hr_h27, hr_h28, hr_h29, hr_h30, hr_h31, hr_h32, hr_h33, hr_h34, hr_h35, hr_h36, hr_h37, hr_h38, hr_h39, hr_h40, hr_h41, hr_h42, hr_h43, hr_h44, hr_h45, hr_h46, hr_h47, hr_h48, hr_h49, hr_h50, hr_h51, hr_h52, hr_h53, hr_h54, hr_h55, hr_h56, hr_h57, hr_h58, hr_h59, hr_h60)
     float[] _hr_l = array.from(hr_l1, hr_l2, hr_l3, hr_l4, hr_l5, hr_l6, hr_l7, hr_l8, hr_l9, hr_l10, hr_l11, hr_l12, hr_l13, hr_l14, hr_l15, hr_l16, hr_l17, hr_l18, hr_l19, hr_l20, hr_l21, hr_l22, hr_l23, hr_l24, hr_l25, hr_l26, hr_l27, hr_l28, hr_l29, hr_l30, hr_l31, hr_l32, hr_l33, hr_l34, hr_l35, hr_l36, hr_l37, hr_l38, hr_l39, hr_l40, hr_l41, hr_l42, hr_l43, hr_l44, hr_l45, hr_l46, hr_l47, hr_l48, hr_l49, hr_l50, hr_l51, hr_l52, hr_l53, hr_l54, hr_l55, hr_l56, hr_l57, hr_l58, hr_l59, hr_l60)
+    float[] _hr_c = array.from(hr_c1, hr_c2, hr_c3, hr_c4, hr_c5, hr_c6, hr_c7, hr_c8, hr_c9, hr_c10, hr_c11, hr_c12, hr_c13, hr_c14, hr_c15, hr_c16, hr_c17, hr_c18, hr_c19, hr_c20, hr_c21, hr_c22, hr_c23, hr_c24, hr_c25, hr_c26, hr_c27, hr_c28, hr_c29, hr_c30, hr_c31, hr_c32, hr_c33, hr_c34, hr_c35, hr_c36, hr_c37, hr_c38, hr_c39, hr_c40, hr_c41, hr_c42, hr_c43, hr_c44, hr_c45, hr_c46, hr_c47, hr_c48, hr_c49, hr_c50, hr_c51, hr_c52, hr_c53, hr_c54, hr_c55, hr_c56, hr_c57, hr_c58, hr_c59, hr_c60)
+    float[] _hr_o = array.from(hr_o1, hr_o2, hr_o3, hr_o4, hr_o5, hr_o6, hr_o7, hr_o8, hr_o9, hr_o10, hr_o11, hr_o12, hr_o13, hr_o14, hr_o15, hr_o16, hr_o17, hr_o18, hr_o19, hr_o20, hr_o21, hr_o22, hr_o23, hr_o24, hr_o25, hr_o26, hr_o27, hr_o28, hr_o29, hr_o30, hr_o31, hr_o32, hr_o33, hr_o34, hr_o35, hr_o36, hr_o37, hr_o38, hr_o39, hr_o40, hr_o41, hr_o42, hr_o43, hr_o44, hr_o45, hr_o46, hr_o47, hr_o48, hr_o49, hr_o50, hr_o51, hr_o52, hr_o53, hr_o54, hr_o55, hr_o56, hr_o57, hr_o58, hr_o59, hr_o60)
     for _hi = 0 to 59
         float _hh = array.get(_hr_h, _hi)
         float _hl = array.get(_hr_l, _hi)
+        float _hc = array.get(_hr_c, _hi)
+        float _ho = array.get(_hr_o, _hi)
         float _hp = _hi < 7 ? 2.5 : _hi < 14 ? 2.4 : _hi < 21 ? 2.3 : _hi < 28 ? 2.2 : _hi < 35 ? 2.1 : _hi < 42 ? 2.0 : _hi < 49 ? 1.9 : _hi < 56 ? 1.8 : 1.7
         if not na(_hh) and _hh > 0.0
             array.push(vp, _hh)
             array.push(vt, _hp)
         if not na(_hl) and _hl > 0.0
             array.push(vp, _hl)
+            array.push(vt, _hp)
+        if not na(_hc) and _hc > 0.0
+            array.push(vp, _hc)
+            array.push(vt, _hp)
+        if not na(_ho) and _ho > 0.0
+            array.push(vp, _ho)
             array.push(vt, _hp)
 
     int n = array.size(vp)
