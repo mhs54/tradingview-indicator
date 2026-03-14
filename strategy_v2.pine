@@ -66,7 +66,7 @@ push_notif    = input.bool(false, "Push Notifications",                  group=g
 grp_kl       = "Key Levels"
 show_kl      = input.bool(true,          "Show Key Levels",       group=grp_kl)
 col_kl       = input.color(color.yellow, "Color",                 group=grp_kl)
-kl_min_space = input.float(0.80,         "Min Spacing ($)",       group=grp_kl, minval=0.25, step=0.25)
+kl_min_space = input.float(1.00,         "Min Spacing ($)",       group=grp_kl, minval=0.25, step=0.25)
 kl_adr_mult  = input.float(1.0,          "ADR Multiplier",        group=grp_kl, minval=0.5, maxval=3.0, step=0.1,
      tooltip="Range shown = this multiplier × 14-day avg daily range. 1.0 = one typical day's move per side.")
 kl_max_side  = input.int(5,              "Max Levels Per Side",   group=grp_kl, minval=2, maxval=12,
