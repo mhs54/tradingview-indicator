@@ -138,6 +138,9 @@ sma200_10m = request.security(syminfo.tickerid, "10", ta.sma(close, 200))
 string _rth_ticker = ticker.modify(syminfo.tickerid, session=session.regular)
 [kl_h1, kl_l1, kl_c1, kl_o1, kl_h2, kl_l2, kl_c2, kl_o2, kl_h3, kl_l3, kl_c3, kl_o3, kl_h4, kl_l4, kl_c4, kl_o4, kl_h5, kl_l5, kl_c5, kl_o5, kl_h6, kl_l6, kl_c6, kl_o6, kl_h7, kl_l7, kl_c7, kl_o7, kl_h8, kl_l8, kl_c8, kl_o8, kl_h9, kl_l9, kl_c9, kl_o9, kl_h10, kl_l10, kl_c10, kl_o10] = request.security(_rth_ticker, "D", get_daily_levels(), lookahead=barmerge.lookahead_on)
 
+// All-Time High over 2 years of RTH daily bars — priority 60
+float ath_level = request.security(_rth_ticker, "D", ta.highest(high, 504), lookahead=barmerge.lookahead_on)
+
 // 10 prior days of extended session H/L (premarket + afterhours)
 string _eth_ticker = ticker.modify(syminfo.tickerid, session=session.extended)
 [eth_h1, eth_l1, eth_h2, eth_l2, eth_h3, eth_l3, eth_h4, eth_l4, eth_h5, eth_l5, eth_h6, eth_l6, eth_h7, eth_l7, eth_h8, eth_l8, eth_h9, eth_l9, eth_h10, eth_l10] = request.security(_eth_ticker, "D", get_eth_levels(), lookahead=barmerge.lookahead_on)
@@ -466,7 +469,12 @@ if show_kl and session_open
             array.push(vp, _p)
             array.push(vt, array.get(_oc_t, _i))
 
-    // Hourly 200 SMA — priority 50 (highest)
+    // All-Time High — priority 60 (highest)
+    if not na(ath_level) and ath_level > 0.0
+        array.push(vp, ath_level)
+        array.push(vt, 60.0)
+
+    // Hourly 200 SMA — priority 50
     if not na(sma200_1h) and sma200_1h > 0.0
         array.push(vp, sma200_1h)
         array.push(vt, 50.0)
