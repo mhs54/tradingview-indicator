@@ -84,7 +84,22 @@ is_atl = not na(pml) and (all_time_low  >= pml - 0.50)
 // DAILY OHLC LEVELS — request prior 25 days
 // Uses engine priority: prior day O/C=30, H/L=10.5; day 2+ H/L=max(30-i,5), O/C=max(10.5-i*0.5,1.5)
 // =============================================================================
-get_daily_val(src, offset) => request.security(syminfo.tickerid, "D", src[offset], lookahead=barmerge.lookahead_on)
+// Pre-fetch daily OHLC for days 1-10 (Pine cannot use loop vars in request.security)
+[dh1,dl1,do1,dc1] = request.security(syminfo.tickerid,"D",[high[1],low[1],open[1],close[1]],lookahead=barmerge.lookahead_on)
+[dh2,dl2,do2,dc2] = request.security(syminfo.tickerid,"D",[high[2],low[2],open[2],close[2]],lookahead=barmerge.lookahead_on)
+[dh3,dl3,do3,dc3] = request.security(syminfo.tickerid,"D",[high[3],low[3],open[3],close[3]],lookahead=barmerge.lookahead_on)
+[dh4,dl4,do4,dc4] = request.security(syminfo.tickerid,"D",[high[4],low[4],open[4],close[4]],lookahead=barmerge.lookahead_on)
+[dh5,dl5,do5,dc5] = request.security(syminfo.tickerid,"D",[high[5],low[5],open[5],close[5]],lookahead=barmerge.lookahead_on)
+[dh6,dl6,do6,dc6] = request.security(syminfo.tickerid,"D",[high[6],low[6],open[6],close[6]],lookahead=barmerge.lookahead_on)
+[dh7,dl7,do7,dc7] = request.security(syminfo.tickerid,"D",[high[7],low[7],open[7],close[7]],lookahead=barmerge.lookahead_on)
+[dh8,dl8,do8,dc8] = request.security(syminfo.tickerid,"D",[high[8],low[8],open[8],close[8]],lookahead=barmerge.lookahead_on)
+[dh9,dl9,do9,dc9] = request.security(syminfo.tickerid,"D",[high[9],low[9],open[9],close[9]],lookahead=barmerge.lookahead_on)
+[dh10,dl10,do10,dc10] = request.security(syminfo.tickerid,"D",[high[10],low[10],open[10],close[10]],lookahead=barmerge.lookahead_on)
+
+daily_h = array.from(dh1,dh2,dh3,dh4,dh5,dh6,dh7,dh8,dh9,dh10)
+daily_l = array.from(dl1,dl2,dl3,dl4,dl5,dl6,dl7,dl8,dl9,dl10)
+daily_o = array.from(do1,do2,do3,do4,do5,do6,do7,do8,do9,do10)
+daily_c = array.from(dc1,dc2,dc3,dc4,dc5,dc6,dc7,dc8,dc9,dc10)
 
 // =============================================================================
 // SPACING DECAY — matches levels.py _min_spacing()
@@ -175,15 +190,16 @@ if is_rth and pm_locked and show_kl and barstate.islast
             array.push(cand_pri, pri)
         psych_p += 50
 
-    // ── Daily OHLC — 25 days, engine priority decay ──
-    for i = 1 to 25
-        d_h = get_daily_val(high, i)
-        d_l = get_daily_val(low, i)
-        d_o = get_daily_val(open, i)
-        d_c = get_daily_val(close, i)
+    // ── Daily OHLC — 10 days, engine priority decay ──
+    for i = 0 to 9
+        d_h = array.get(daily_h, i)
+        d_l = array.get(daily_l, i)
+        d_o = array.get(daily_o, i)
+        d_c = array.get(daily_c, i)
+        day_num = i + 1  // 1-indexed to match engine
         if not na(d_h)
-            float hl_pri = i == 1 ? 10.5 : math.max(30.0 - i, 5.0)
-            float oc_pri = i == 1 ? 30.0 : math.max(10.5 - i * 0.5, 1.5)
+            float hl_pri = day_num == 1 ? 10.5 : math.max(30.0 - day_num, 5.0)
+            float oc_pri = day_num == 1 ? 30.0 : math.max(10.5 - day_num * 0.5, 1.5)
             array.push(cand_price, d_h)
             array.push(cand_pri, hl_pri)
             array.push(cand_price, d_l)
