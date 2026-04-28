@@ -229,7 +229,7 @@ if show_kl and session_open
     float[] _hr_c = array.from(hr_c1, hr_c2, hr_c3, hr_c4, hr_c5, hr_c6, hr_c7, hr_c8, hr_c9, hr_c10, hr_c11, hr_c12, hr_c13, hr_c14, hr_c15, hr_c16, hr_c17, hr_c18, hr_c19, hr_c20, hr_c21, hr_c22, hr_c23, hr_c24, hr_c25, hr_c26, hr_c27, hr_c28, hr_c29, hr_c30)
     for _hi = 0 to 29
         float _hp = _hi < 7 ? 2.5 : _hi < 14 ? 2.4 : _hi < 21 ? 2.3 : 2.2
-        float[4] _vals = array.from(array.get(_hr_h, _hi), array.get(_hr_l, _hi), array.get(_hr_o, _hi), array.get(_hr_c, _hi))
+        _vals = array.from(array.get(_hr_h, _hi), array.get(_hr_l, _hi), array.get(_hr_o, _hi), array.get(_hr_c, _hi))
         for _vi = 0 to 3
             float _v = array.get(_vals, _vi)
             if not na(_v) and _v > 0.0
