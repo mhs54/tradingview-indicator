@@ -135,8 +135,8 @@ if is_rth and pm_locked and show_pm
         line.set_x2(ln_pmh, bar_index)
         line.set_x2(ln_pml, bar_index)
     else
-        ln_pmh := line.new(bar_index, pmh, bar_index, pmh, color=col_pmh, width=pm_width, style=line.style_solid)
-        ln_pml := line.new(bar_index, pml, bar_index, pml, color=col_pml, width=pm_width, style=line.style_solid)
+        ln_pmh := line.new(bar_index, pmh, bar_index, pmh, color=col_pmh, width=pm_width, style=line.style_solid, extend=extend.right)
+        ln_pml := line.new(bar_index, pml, bar_index, pml, color=col_pml, width=pm_width, style=line.style_solid, extend=extend.right)
         lbl_pmh := label.new(bar_index, pmh, "PMH " + str.tostring(pmh, format.mintick), style=label.style_none, textcolor=col_pmh, size=size.small)
         lbl_pml := label.new(bar_index, pml, "PML " + str.tostring(pml, format.mintick), style=label.style_none, textcolor=col_pml, size=size.small)
     if not na(lbl_pmh)
@@ -150,10 +150,10 @@ if is_rth and pm_locked and show_buf
         line.set_x2(ln_buf_pml_hi, bar_index)
         line.set_x2(ln_buf_pml_lo, bar_index)
     else
-        ln_buf_pmh_hi := line.new(bar_index, pmh + pm_buffer, bar_index, pmh + pm_buffer, color=col_buf, width=1, style=line.style_dotted)
-        ln_buf_pmh_lo := line.new(bar_index, pmh - pm_buffer, bar_index, pmh - pm_buffer, color=col_buf, width=1, style=line.style_dotted)
-        ln_buf_pml_hi := line.new(bar_index, pml + pm_buffer, bar_index, pml + pm_buffer, color=col_buf, width=1, style=line.style_dotted)
-        ln_buf_pml_lo := line.new(bar_index, pml - pm_buffer, bar_index, pml - pm_buffer, color=col_buf, width=1, style=line.style_dotted)
+        ln_buf_pmh_hi := line.new(bar_index, pmh + pm_buffer, bar_index, pmh + pm_buffer, color=col_buf, width=1, style=line.style_dotted, extend=extend.right)
+        ln_buf_pmh_lo := line.new(bar_index, pmh - pm_buffer, bar_index, pmh - pm_buffer, color=col_buf, width=1, style=line.style_dotted, extend=extend.right)
+        ln_buf_pml_hi := line.new(bar_index, pml + pm_buffer, bar_index, pml + pm_buffer, color=col_buf, width=1, style=line.style_dotted, extend=extend.right)
+        ln_buf_pml_lo := line.new(bar_index, pml - pm_buffer, bar_index, pml - pm_buffer, color=col_buf, width=1, style=line.style_dotted, extend=extend.right)
 
 if is_rth and pm_locked and show_kl and barstate.islast
     // Clean old
@@ -344,7 +344,7 @@ if is_rth and pm_locked and show_kl and barstate.islast
             is_ath_lvl = is_ath
             c = is_sma ? col_sma : is_ath_lvl ? col_ath : col_kl
             s = is_sma ? line.style_solid : is_ath_lvl ? line.style_dotted : line.style_dashed
-            ln = line.new(bar_index - 50, lvl, bar_index + 10, lvl, color=c, width=kl_width, style=s)
+            ln = line.new(bar_index - 1, lvl, bar_index, lvl, color=c, width=kl_width, style=s, extend=extend.both)
             array.push(kl_lines, ln)
             if show_labels
                 tag = is_sma ? "200MA " : is_ath_lvl ? "ATH " : ""
@@ -358,7 +358,7 @@ if is_rth and pm_locked and show_kl and barstate.islast
             is_atl_lvl = is_atl
             c = is_sma ? col_sma : is_atl_lvl ? col_ath : col_kl
             s = is_sma ? line.style_solid : is_atl_lvl ? line.style_dotted : line.style_dashed
-            ln = line.new(bar_index - 50, lvl, bar_index + 10, lvl, color=c, width=kl_width, style=s)
+            ln = line.new(bar_index - 1, lvl, bar_index, lvl, color=c, width=kl_width, style=s, extend=extend.both)
             array.push(kl_lines, ln)
             if show_labels
                 tag = is_sma ? "200MA " : is_atl_lvl ? "ATL " : ""
