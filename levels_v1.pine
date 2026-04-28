@@ -227,13 +227,13 @@ if is_rth and pm_locked and show_kl and barstate.islast
     if n_cand >= 2
         for i = 0 to n_cand - 2
             for j = i + 1 to n_cand - 1
-            if array.get(cand_pri, j) > array.get(cand_pri, i)
-                tmp_p = array.get(cand_price, i)
-                tmp_r = array.get(cand_pri, i)
-                array.set(cand_price, i, array.get(cand_price, j))
-                array.set(cand_pri, i, array.get(cand_pri, j))
-                array.set(cand_price, j, tmp_p)
-                array.set(cand_pri, j, tmp_r)
+                if array.get(cand_pri, j) > array.get(cand_pri, i)
+                    tmp_p = array.get(cand_price, i)
+                    tmp_r = array.get(cand_pri, i)
+                    array.set(cand_price, i, array.get(cand_price, j))
+                    array.set(cand_pri, i, array.get(cand_pri, j))
+                    array.set(cand_price, j, tmp_p)
+                    array.set(cand_pri, j, tmp_r)
 
     // ── Greedy selection — matches levels.py logic ──
     above = array.new_float()
