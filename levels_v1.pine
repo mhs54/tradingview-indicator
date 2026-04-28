@@ -322,13 +322,14 @@ if show_kl and session_open
                 continue
             if is_atl and p < pml
                 continue
+            // Reference prices for distance/buffer checks
+            float _ref_hi = not na(pmh) ? pmh : open
+            float _ref_lo = not na(pml) ? pml : open
             // PM buffer zone — levels inside PM range + buffer are excluded
             bool in_pm = p >= (_ref_lo - pm_buffer) and p <= (_ref_hi + pm_buffer)
             if in_pm
                 continue
-            // Distance cap — if PM levels are na, use open as reference
-            float _ref_hi = not na(pmh) ? pmh : open
-            float _ref_lo = not na(pml) ? pml : open
+            // Distance cap
             bool too_far = p > _ref_hi + max_dist or p < _ref_lo - max_dist
             if too_far
                 continue
