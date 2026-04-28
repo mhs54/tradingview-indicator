@@ -322,12 +322,14 @@ if show_kl and session_open
                 continue
             if is_atl and p < pml
                 continue
-            // PM buffer zone
-            bool in_pm = not na(pmh) and not na(pml) and p >= (pml - pm_buffer) and p <= (pmh + pm_buffer)
+            // PM buffer zone — levels inside PM range + buffer are excluded
+            bool in_pm = p >= (_ref_lo - pm_buffer) and p <= (_ref_hi + pm_buffer)
             if in_pm
                 continue
-            // Distance cap
-            bool too_far = (not na(pmh) and p > pmh and p > pmh + max_dist) or (not na(pml) and p < pml and p < pml - max_dist)
+            // Distance cap — if PM levels are na, use open as reference
+            float _ref_hi = not na(pmh) ? pmh : open
+            float _ref_lo = not na(pml) ? pml : open
+            bool too_far = p > _ref_hi + max_dist or p < _ref_lo - max_dist
             if too_far
                 continue
             // Linear spacing decay: base at PM, decays $0.20 at max_dist
@@ -356,8 +358,8 @@ if show_kl and session_open
             if not na(pmh) and _sp > pmh and cnt_a < kl_max_side
                 array.push(above, _sp)
                 cnt_a += 1
-    // SMA bypasses PM buffer — add if above PMH
-    if not na(sma200_1h) and sma200_1h > 0.0 and not na(pmh) and sma200_1h > pmh
+    // SMA bypasses PM buffer but NOT distance cap — add if above PMH and within range
+    if not na(sma200_1h) and sma200_1h > 0.0 and not na(pmh) and sma200_1h > pmh and sma200_1h <= pmh + max_dist
         array.push(above, sma200_1h)
 
     if not is_atl and array.size(accepted) > 0
@@ -367,8 +369,8 @@ if show_kl and session_open
             if not na(pml) and _sp < pml and cnt_b < kl_max_side
                 array.push(below, _sp)
                 cnt_b += 1
-    // SMA bypasses PM buffer — add if below PML
-    if not na(sma200_1h) and sma200_1h > 0.0 and not na(pml) and sma200_1h < pml
+    // SMA bypasses PM buffer but NOT distance cap — add if below PML and within range
+    if not na(sma200_1h) and sma200_1h > 0.0 and not na(pml) and sma200_1h < pml and sma200_1h >= pml - max_dist
         array.push(below, sma200_1h)
 
     // Sort above ascending, below descending
