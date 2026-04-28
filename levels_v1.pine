@@ -155,7 +155,7 @@ if is_rth and pm_locked and show_buf
         ln_buf_pml_hi := line.new(bar_index, pml + pm_buffer, bar_index, pml + pm_buffer, color=col_buf, width=1, style=line.style_dotted, extend=extend.right)
         ln_buf_pml_lo := line.new(bar_index, pml - pm_buffer, bar_index, pml - pm_buffer, color=col_buf, width=1, style=line.style_dotted, extend=extend.right)
 
-if is_rth and pm_locked and show_kl and barstate.islast
+if is_rth and pm_locked and show_kl
     // Clean old
     if array.size(kl_lines) > 0
         for i = 0 to array.size(kl_lines) - 1
@@ -344,7 +344,7 @@ if is_rth and pm_locked and show_kl and barstate.islast
             is_ath_lvl = is_ath
             c = is_sma ? col_sma : is_ath_lvl ? col_ath : col_kl
             s = is_sma ? line.style_solid : is_ath_lvl ? line.style_dotted : line.style_dashed
-            ln = line.new(bar_index - 1, lvl, bar_index, lvl, color=c, width=kl_width, style=s, extend=extend.both)
+            ln = line.new(math.max(0, bar_index - 2000), lvl, bar_index, lvl, color=c, width=kl_width, style=s, extend=extend.right)
             array.push(kl_lines, ln)
             if show_labels
                 tag = is_sma ? "200MA " : is_ath_lvl ? "ATH " : ""
@@ -358,7 +358,7 @@ if is_rth and pm_locked and show_kl and barstate.islast
             is_atl_lvl = is_atl
             c = is_sma ? col_sma : is_atl_lvl ? col_ath : col_kl
             s = is_sma ? line.style_solid : is_atl_lvl ? line.style_dotted : line.style_dashed
-            ln = line.new(bar_index - 1, lvl, bar_index, lvl, color=c, width=kl_width, style=s, extend=extend.both)
+            ln = line.new(math.max(0, bar_index - 2000), lvl, bar_index, lvl, color=c, width=kl_width, style=s, extend=extend.right)
             array.push(kl_lines, ln)
             if show_labels
                 tag = is_sma ? "200MA " : is_atl_lvl ? "ATL " : ""
