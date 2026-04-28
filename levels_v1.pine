@@ -157,10 +157,12 @@ if is_rth and pm_locked and show_buf
 
 if is_rth and pm_locked and show_kl and barstate.islast
     // Clean old
-    for i = 0 to math.max(array.size(kl_lines) - 1, -1)
-        line.delete(array.get(kl_lines, i))
-    for i = 0 to math.max(array.size(kl_labels) - 1, -1)
-        label.delete(array.get(kl_labels, i))
+    if array.size(kl_lines) > 0
+        for i = 0 to array.size(kl_lines) - 1
+            line.delete(array.get(kl_lines, i))
+    if array.size(kl_labels) > 0
+        for i = 0 to array.size(kl_labels) - 1
+            label.delete(array.get(kl_labels, i))
     array.clear(kl_lines)
     array.clear(kl_labels)
 
@@ -222,12 +224,9 @@ if is_rth and pm_locked and show_kl and barstate.islast
 
     // ── Sort by priority DESC (bubble sort — Pine limitation) ──
     n_cand = array.size(cand_price)
-    if n_cand < 2
-        n_cand := 0  // skip sort
-    for i = 0 to math.max(n_cand - 2, 0)
-        if n_cand < 2
-            break
-        for j = i + 1 to n_cand - 1
+    if n_cand >= 2
+        for i = 0 to n_cand - 2
+            for j = i + 1 to n_cand - 1
             if array.get(cand_pri, j) > array.get(cand_pri, i)
                 tmp_p = array.get(cand_price, i)
                 tmp_r = array.get(cand_pri, i)
@@ -288,21 +287,23 @@ if is_rth and pm_locked and show_kl and barstate.islast
         // Spacing check against already accepted levels
         ms = min_spacing(price)
         spaced = true
-        for j = 0 to math.max(array.size(accepted) - 1, -1)
-            if math.abs(price - array.get(accepted, j)) < ms
-                spaced := false
-                break
+        if array.size(accepted) > 0
+            for j = 0 to array.size(accepted) - 1
+                if math.abs(price - array.get(accepted, j)) < ms
+                    spaced := false
+                    break
         if spaced
             array.push(accepted, price)
 
     // Split accepted into above/below (only for non-ATH/ATL sides)
     if not is_ath
         count_a = 0
-        for i = 0 to math.max(array.size(accepted) - 1, -1)
-            p = array.get(accepted, i)
-            if p > pmh and count_a < kl_max_side
-                array.push(above, p)
-                count_a += 1
+        if array.size(accepted) > 0
+            for i = 0 to array.size(accepted) - 1
+                p = array.get(accepted, i)
+                if p > pmh and count_a < kl_max_side
+                    array.push(above, p)
+                    count_a += 1
         // Add SMA if above
         if sma_accepted_above
             array.push(above, sma_level)
@@ -317,11 +318,12 @@ if is_rth and pm_locked and show_kl and barstate.islast
 
     if not is_atl
         count_b = 0
-        for i = 0 to math.max(array.size(accepted) - 1, -1)
-            p = array.get(accepted, i)
-            if p < pml and count_b < kl_max_side
-                array.push(below, p)
-                count_b += 1
+        if array.size(accepted) > 0
+            for i = 0 to array.size(accepted) - 1
+                p = array.get(accepted, i)
+                if p < pml and count_b < kl_max_side
+                    array.push(below, p)
+                    count_b += 1
         // Add SMA if below
         if sma_accepted_below
             array.push(below, sma_level)
@@ -335,20 +337,22 @@ if is_rth and pm_locked and show_kl and barstate.islast
                         array.set(below, j, tmp)
 
     // ── Draw levels ──
-    for i = 0 to math.max(array.size(above) - 1, -1)
-        lvl = array.get(above, i)
-        is_sma = not na(sma_level) and math.abs(lvl - sma_level) < 0.01
-        is_ath_lvl = is_ath
-        c = is_sma ? col_sma : is_ath_lvl ? col_ath : col_kl
-        s = is_sma ? line.style_solid : is_ath_lvl ? line.style_dotted : line.style_dashed
-        ln = line.new(bar_index - 50, lvl, bar_index + 10, lvl, color=c, width=kl_width, style=s)
-        array.push(kl_lines, ln)
-        if show_labels
-            tag = is_sma ? "200MA " : is_ath_lvl ? "ATH " : ""
-            lbl = label.new(bar_index + 10, lvl, tag + str.tostring(lvl, format.mintick), style=label.style_none, textcolor=c, size=size.tiny)
-            array.push(kl_labels, lbl)
+    if array.size(above) > 0
+        for i = 0 to array.size(above) - 1
+            lvl = array.get(above, i)
+            is_sma = not na(sma_level) and math.abs(lvl - sma_level) < 0.01
+            is_ath_lvl = is_ath
+            c = is_sma ? col_sma : is_ath_lvl ? col_ath : col_kl
+            s = is_sma ? line.style_solid : is_ath_lvl ? line.style_dotted : line.style_dashed
+            ln = line.new(bar_index - 50, lvl, bar_index + 10, lvl, color=c, width=kl_width, style=s)
+            array.push(kl_lines, ln)
+            if show_labels
+                tag = is_sma ? "200MA " : is_ath_lvl ? "ATH " : ""
+                lbl = label.new(bar_index + 10, lvl, tag + str.tostring(lvl, format.mintick), style=label.style_none, textcolor=c, size=size.tiny)
+                array.push(kl_labels, lbl)
 
-    for i = 0 to math.max(array.size(below) - 1, -1)
+    if array.size(below) > 0
+        for i = 0 to array.size(below) - 1
         lvl = array.get(below, i)
         is_sma = not na(sma_level) and math.abs(lvl - sma_level) < 0.01
         is_atl_lvl = is_atl
