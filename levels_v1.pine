@@ -2,19 +2,17 @@
 // LTP Levels Indicator v1.0
 // Matches backtest engine levels.py as closely as Pine Script allows.
 // Missing: hourly density clustering, ETH H/L exceedance, gap fill midpoints.
-// Uses plot() for all levels — always anchored to price, works with any zoom.
+// Line drawing matches strategy_v2.pine exactly.
 // =============================================================================
 //@version=6
-indicator("LTP Levels v1", overlay=true, max_bars_back=501)
+indicator("LTP Levels v1", overlay=true, max_bars_back=501, max_lines_count=500, max_labels_count=500)
 
 // =============================================================================
 // INPUTS
 // =============================================================================
 grp_pm = "Pre-Market Levels"
 show_pm    = input.bool(true,          "Show PMH / PML",   group=grp_pm)
-col_pmh    = input.color(color.white,  "PMH Color",        group=grp_pm)
-col_pml    = input.color(color.white,  "PML Color",        group=grp_pm)
-pm_width   = input.int(2, "Width",     minval=1, maxval=4, group=grp_pm)
+col_pm     = input.color(color.white,  "PM Color",         group=grp_pm)
 
 grp_buf = "PM Buffer Zone"
 show_buf   = input.bool(true,          "Show Buffer Zone", group=grp_buf)
@@ -24,41 +22,43 @@ pm_buffer  = input.float(0.80,         "Buffer ($)",       group=grp_buf, minval
 grp_kl = "Key Levels (Targets)"
 show_kl       = input.bool(true,          "Show Key Levels",     group=grp_kl)
 col_kl        = input.color(color.yellow, "Color",               group=grp_kl)
-kl_width      = input.int(1, "Width",     minval=1, maxval=4,    group=grp_kl)
 kl_min_space  = input.float(1.00,         "Min Spacing ($)",     group=grp_kl, minval=0.10, step=0.10)
 kl_adr_mult   = input.float(1.5,          "Max Dist (ADR mult)", group=grp_kl, minval=0.5, maxval=3.0, step=0.1)
 kl_max_side   = input.int(5,              "Max Levels Per Side", group=grp_kl, minval=2, maxval=12)
 col_sma       = input.color(#FF69B4,      "200 SMA Level Color", group=grp_kl)
-col_ath       = input.color(color.lime,   "ATH Level Color",     group=grp_kl)
 
 // =============================================================================
-// SESSION DETECTION
+// SESSION DETECTION — exact same as strategy_v2.pine
 // =============================================================================
-is_new_day = ta.change(time("D")) != 0
-is_rth     = not na(time(timeframe.period, "0930-1600", "America/New_York"))
+bool is_regular    = session.ismarket
+bool session_open  = is_regular and not is_regular[1]
+bool session_close = not is_regular and is_regular[1]
 
 // =============================================================================
 // PRE-MARKET HIGH / LOW
 // =============================================================================
 var float pmh = na
 var float pml = na
+
+if session_open
+    pmh := request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
+    pml := request.security(syminfo.tickerid, "D", low[1],  lookahead=barmerge.lookahead_on)
+
+// Track actual pre-market H/L
 var float today_pm_high = na
 var float today_pm_low  = na
-var bool  pm_locked = false
 
-if is_new_day
+if session_open
     today_pm_high := na
     today_pm_low  := na
-    pm_locked     := false
 
-if not is_rth and not pm_locked
+if session.ispremarket
     today_pm_high := na(today_pm_high) ? high : math.max(today_pm_high, high)
     today_pm_low  := na(today_pm_low)  ? low  : math.min(today_pm_low,  low)
 
-if is_rth and not pm_locked and not na(today_pm_high)
-    pmh       := today_pm_high
-    pml       := today_pm_low
-    pm_locked := true
+if session_open and not na(today_pm_high)
+    pmh := today_pm_high
+    pml := today_pm_low
 
 // =============================================================================
 // ADR + HOURLY 200 SMA + ATH/ATL
@@ -88,7 +88,7 @@ all_time_low  = request.security(syminfo.tickerid, "D", ta.lowest(low, 500),   l
 
 daily_h = array.from(dh1,dh2,dh3,dh4,dh5,dh6,dh7,dh8,dh9,dh10)
 daily_l = array.from(dl1,dl2,dl3,dl4,dl5,dl6,dl7,dl8,dl9,dl10)
-daily_o = array.from(do1,do2,do3,do4,do5,do6,do7,do8,do9,do10)
+daily_o = array.from(do1,do2,do3,do4,do5,do6,do7,do8,do9,dc10)
 daily_c = array.from(dc1,dc2,dc3,dc4,dc5,dc6,dc7,dc8,dc9,dc10)
 
 // =============================================================================
@@ -104,59 +104,63 @@ min_spacing(price) =>
     math.max(kl_min_space - frac * 0.20, 0.10)
 
 // =============================================================================
-// LEVEL COMPUTATION — stored as persistent floats, updated once per session
-// 5 above + 5 below + SMA level = 11 plot slots
+// LINE ARRAYS — same pattern as strategy_v2.pine
 // =============================================================================
-var float kl_above_1 = na
-var float kl_above_2 = na
-var float kl_above_3 = na
-var float kl_above_4 = na
-var float kl_above_5 = na
-var float kl_below_1 = na
-var float kl_below_2 = na
-var float kl_below_3 = na
-var float kl_below_4 = na
-var float kl_below_5 = na
-var float kl_sma     = na
-var bool  kl_computed = false
-var bool  kl_is_ath  = false
-var bool  kl_is_atl  = false
+var line[] pm_lines  = array.new_line(0)
+var line[] buf_lines = array.new_line(0)
+var line[] kl_lines  = array.new_line(0)
 
-if is_new_day
-    kl_above_1 := na
-    kl_above_2 := na
-    kl_above_3 := na
-    kl_above_4 := na
-    kl_above_5 := na
-    kl_below_1 := na
-    kl_below_2 := na
-    kl_below_3 := na
-    kl_below_4 := na
-    kl_below_5 := na
-    kl_sma     := na
-    kl_computed := false
-    kl_is_ath  := false
-    kl_is_atl  := false
+// =============================================================================
+// DRAW AT SESSION OPEN — one time, extend right
+// =============================================================================
+if session_open and not na(pmh) and not na(pml)
+    int hist_x = math.max(0, bar_index - 2000)
 
-if is_rth and pm_locked and not kl_computed
-    kl_computed := true
+    // ── PM LINES ──
+    if show_pm
+        // Clean prior day
+        if array.size(pm_lines) > 0
+            for i = 0 to array.size(pm_lines) - 1
+                line.delete(array.get(pm_lines, i))
+        array.clear(pm_lines)
 
-    is_ath = not na(pmh) and (all_time_high <= pmh + 0.50)
-    is_atl = not na(pml) and (all_time_low  >= pml - 0.50)
-    kl_is_ath := is_ath
-    kl_is_atl := is_atl
+        array.push(pm_lines, line.new(hist_x, pmh, bar_index, pmh, color=col_pm, width=2, style=line.style_solid, extend=extend.right))
+        array.push(pm_lines, line.new(hist_x, pml, bar_index, pml, color=col_pm, width=2, style=line.style_solid, extend=extend.right))
 
-    // SMA level
-    if not na(sma_200_1h) and sma_200_1h > 0
-        if sma_200_1h > pmh or sma_200_1h < pml
-            kl_sma := sma_200_1h
+    // ── BUFFER LINES ──
+    if show_buf
+        if array.size(buf_lines) > 0
+            for i = 0 to array.size(buf_lines) - 1
+                line.delete(array.get(buf_lines, i))
+        array.clear(buf_lines)
 
-    // Candidate arrays
-    cand_price = array.new_float()
-    cand_pri   = array.new_float()
+        array.push(buf_lines, line.new(hist_x, pmh + pm_buffer, bar_index, pmh + pm_buffer, color=col_buf, width=1, style=line.style_dotted, extend=extend.right))
+        array.push(buf_lines, line.new(hist_x, pmh - pm_buffer, bar_index, pmh - pm_buffer, color=col_buf, width=1, style=line.style_dotted, extend=extend.right))
+        array.push(buf_lines, line.new(hist_x, pml + pm_buffer, bar_index, pml + pm_buffer, color=col_buf, width=1, style=line.style_dotted, extend=extend.right))
+        array.push(buf_lines, line.new(hist_x, pml - pm_buffer, bar_index, pml - pm_buffer, color=col_buf, width=1, style=line.style_dotted, extend=extend.right))
 
-    // $50 psych levels
-    if not na(pml) and not na(pmh)
+    // ── KEY LEVELS ──
+    if show_kl
+        if array.size(kl_lines) > 0
+            for i = 0 to array.size(kl_lines) - 1
+                line.delete(array.get(kl_lines, i))
+        array.clear(kl_lines)
+
+        is_ath = all_time_high <= pmh + 0.50
+        is_atl = all_time_low  >= pml - 0.50
+
+        // SMA level
+        float sma_level = na
+        if not na(sma_200_1h) and sma_200_1h > 0
+            if sma_200_1h > pmh or sma_200_1h < pml
+                sma_level := sma_200_1h
+                array.push(kl_lines, line.new(hist_x, sma_level, bar_index, sma_level, color=col_sma, width=2, style=line.style_solid, extend=extend.right))
+
+        // Candidate pool
+        cand_price = array.new_float()
+        cand_pri   = array.new_float()
+
+        // $50 psych
         psych_p = math.floor((pml - max_dist) / 50) * 50
         while psych_p <= pmh + max_dist
             if psych_p > 0
@@ -164,27 +168,26 @@ if is_rth and pm_locked and not kl_computed
                 array.push(cand_pri, psych_p % 100 == 0 ? 45.0 : 40.0)
             psych_p += 50
 
-    // Daily OHLC — 10 days
-    for i = 0 to 9
-        d_h = array.get(daily_h, i)
-        d_l = array.get(daily_l, i)
-        d_o = array.get(daily_o, i)
-        d_c = array.get(daily_c, i)
-        day_num = i + 1
-        if not na(d_h)
-            float hl_pri = day_num == 1 ? 10.5 : math.max(30.0 - day_num, 5.0)
-            float oc_pri = day_num == 1 ? 30.0 : math.max(10.5 - day_num * 0.5, 1.5)
-            array.push(cand_price, d_h)
-            array.push(cand_pri, hl_pri)
-            array.push(cand_price, d_l)
-            array.push(cand_pri, hl_pri)
-            array.push(cand_price, d_o)
-            array.push(cand_pri, oc_pri)
-            array.push(cand_price, d_c)
-            array.push(cand_pri, oc_pri)
+        // Daily OHLC
+        for i = 0 to 9
+            d_h = array.get(daily_h, i)
+            d_l = array.get(daily_l, i)
+            d_o = array.get(daily_o, i)
+            d_c = array.get(daily_c, i)
+            day_num = i + 1
+            if not na(d_h)
+                float hl_pri = day_num == 1 ? 10.5 : math.max(30.0 - day_num, 5.0)
+                float oc_pri = day_num == 1 ? 30.0 : math.max(10.5 - day_num * 0.5, 1.5)
+                array.push(cand_price, d_h)
+                array.push(cand_pri, hl_pri)
+                array.push(cand_price, d_l)
+                array.push(cand_pri, hl_pri)
+                array.push(cand_price, d_o)
+                array.push(cand_pri, oc_pri)
+                array.push(cand_price, d_c)
+                array.push(cand_pri, oc_pri)
 
-    // $1 whole-dollar fallback
-    if not na(pml) and not na(pmh)
+        // $1 fallback
         dollar_p = math.floor(pml - max_dist)
         while dollar_p <= pmh + max_dist
             if dollar_p > 0
@@ -192,151 +195,108 @@ if is_rth and pm_locked and not kl_computed
                 array.push(cand_pri, 5.0)
             dollar_p += 1
 
-    // Sort by priority DESC
-    n_cand = array.size(cand_price)
-    if n_cand >= 2
-        for i = 0 to n_cand - 2
-            for j = i + 1 to n_cand - 1
-                if array.get(cand_pri, j) > array.get(cand_pri, i)
-                    tmp_p = array.get(cand_price, i)
-                    tmp_r = array.get(cand_pri, i)
-                    array.set(cand_price, i, array.get(cand_price, j))
-                    array.set(cand_pri, i, array.get(cand_pri, j))
-                    array.set(cand_price, j, tmp_p)
-                    array.set(cand_pri, j, tmp_r)
+        // Sort by priority DESC
+        n_cand = array.size(cand_price)
+        if n_cand >= 2
+            for i = 0 to n_cand - 2
+                for j = i + 1 to n_cand - 1
+                    if array.get(cand_pri, j) > array.get(cand_pri, i)
+                        tmp_p = array.get(cand_price, i)
+                        tmp_r = array.get(cand_pri, i)
+                        array.set(cand_price, i, array.get(cand_price, j))
+                        array.set(cand_pri, i, array.get(cand_pri, j))
+                        array.set(cand_price, j, tmp_p)
+                        array.set(cand_pri, j, tmp_r)
 
-    // Build above/below arrays
-    above = array.new_float()
-    below = array.new_float()
+        // ATH above
+        above = array.new_float()
+        if is_ath
+            float ath_start = math.ceil(pmh)
+            if math.abs(ath_start - pmh) < 0.01
+                ath_start += 0.50
+            for i = 0 to kl_max_side - 1
+                array.push(above, ath_start + i * 0.50)
 
-    // ATH: $0.50 increments
-    if is_ath
-        float ath_start = math.ceil(pmh)
-        if math.abs(ath_start - pmh) < 0.01
-            ath_start += 0.50
-        for i = 0 to kl_max_side - 1
-            array.push(above, ath_start + i * 0.50)
+        // ATL below
+        below = array.new_float()
+        if is_atl
+            float atl_start = math.floor(pml)
+            if math.abs(atl_start - pml) < 0.01
+                atl_start -= 0.50
+            for i = 0 to kl_max_side - 1
+                array.push(below, atl_start - i * 0.50)
 
-    // ATL: $0.50 decrements
-    if is_atl
-        float atl_start = math.floor(pml)
-        if math.abs(atl_start - pml) < 0.01
-            atl_start -= 0.50
-        for i = 0 to kl_max_side - 1
-            array.push(below, atl_start - i * 0.50)
+        // Greedy selection
+        accepted = array.new_float()
+        if n_cand > 0
+            for i = 0 to n_cand - 1
+                price = array.get(cand_price, i)
+                if not na(sma_level) and math.abs(price - sma_level) < 0.01
+                    continue
+                if is_ath and price > pmh
+                    continue
+                if is_atl and price < pml
+                    continue
+                in_pm = price >= (pml - pm_buffer) and price <= (pmh + pm_buffer)
+                if in_pm
+                    continue
+                too_far = (price > pmh and price > pmh + max_dist) or (price < pml and price < pml - max_dist)
+                if too_far
+                    continue
+                ms = min_spacing(price)
+                spaced = true
+                if array.size(accepted) > 0
+                    for j = 0 to array.size(accepted) - 1
+                        if math.abs(price - array.get(accepted, j)) < ms
+                            spaced := false
+                            break
+                if spaced
+                    array.push(accepted, price)
 
-    // Greedy selection
-    accepted = array.new_float()
-    if n_cand > 0
-        for i = 0 to n_cand - 1
-            price = array.get(cand_price, i)
-            if not na(kl_sma) and math.abs(price - kl_sma) < 0.01
-                continue
-            if is_ath and price > pmh
-                continue
-            if is_atl and price < pml
-                continue
-            in_pm = price >= (pml - pm_buffer) and price <= (pmh + pm_buffer)
-            if in_pm
-                continue
-            too_far = (price > pmh and price > pmh + max_dist) or (price < pml and price < pml - max_dist)
-            if too_far
-                continue
-            ms = min_spacing(price)
-            spaced = true
-            if array.size(accepted) > 0
-                for j = 0 to array.size(accepted) - 1
-                    if math.abs(price - array.get(accepted, j)) < ms
-                        spaced := false
-                        break
-            if spaced
-                array.push(accepted, price)
+        // Split into above/below
+        if not is_ath and array.size(accepted) > 0
+            count_a = 0
+            for i = 0 to array.size(accepted) - 1
+                p = array.get(accepted, i)
+                if p > pmh and count_a < kl_max_side
+                    array.push(above, p)
+                    count_a += 1
 
-    // Split into above/below
-    if not is_ath and array.size(accepted) > 0
-        count_a = 0
-        for i = 0 to array.size(accepted) - 1
-            p = array.get(accepted, i)
-            if p > pmh and count_a < kl_max_side
-                array.push(above, p)
-                count_a += 1
-        if not na(kl_sma) and kl_sma > pmh
-            array.push(above, kl_sma)
+        if not is_atl and array.size(accepted) > 0
+            count_b = 0
+            for i = 0 to array.size(accepted) - 1
+                p = array.get(accepted, i)
+                if p < pml and count_b < kl_max_side
+                    array.push(below, p)
+                    count_b += 1
 
-    if not is_atl and array.size(accepted) > 0
-        count_b = 0
-        for i = 0 to array.size(accepted) - 1
-            p = array.get(accepted, i)
-            if p < pml and count_b < kl_max_side
-                array.push(below, p)
-                count_b += 1
-        if not na(kl_sma) and kl_sma < pml
-            array.push(below, kl_sma)
+        // Draw above levels
+        if array.size(above) > 0
+            for i = 0 to array.size(above) - 1
+                float lvl = array.get(above, i)
+                array.push(kl_lines, line.new(hist_x, lvl, bar_index, lvl, color=col_kl, width=1, style=line.style_solid, extend=extend.right))
 
-    // Sort above ascending, below descending
-    if array.size(above) >= 2
-        for i = 0 to array.size(above) - 2
-            for j = i + 1 to array.size(above) - 1
-                if array.get(above, j) < array.get(above, i)
-                    tmp = array.get(above, i)
-                    array.set(above, i, array.get(above, j))
-                    array.set(above, j, tmp)
-    if array.size(below) >= 2
-        for i = 0 to array.size(below) - 2
-            for j = i + 1 to array.size(below) - 1
-                if array.get(below, j) > array.get(below, i)
-                    tmp = array.get(below, i)
-                    array.set(below, i, array.get(below, j))
-                    array.set(below, j, tmp)
-
-    // Store into persistent vars
-    if array.size(above) >= 1
-        kl_above_1 := array.get(above, 0)
-    if array.size(above) >= 2
-        kl_above_2 := array.get(above, 1)
-    if array.size(above) >= 3
-        kl_above_3 := array.get(above, 2)
-    if array.size(above) >= 4
-        kl_above_4 := array.get(above, 3)
-    if array.size(above) >= 5
-        kl_above_5 := array.get(above, 4)
-    if array.size(below) >= 1
-        kl_below_1 := array.get(below, 0)
-    if array.size(below) >= 2
-        kl_below_2 := array.get(below, 1)
-    if array.size(below) >= 3
-        kl_below_3 := array.get(below, 2)
-    if array.size(below) >= 4
-        kl_below_4 := array.get(below, 3)
-    if array.size(below) >= 5
-        kl_below_5 := array.get(below, 4)
+        // Draw below levels
+        if array.size(below) > 0
+            for i = 0 to array.size(below) - 1
+                float lvl = array.get(below, i)
+                array.push(kl_lines, line.new(hist_x, lvl, bar_index, lvl, color=col_kl, width=1, style=line.style_solid, extend=extend.right))
 
 // =============================================================================
-// PLOT — all levels as horizontal lines, always anchored to price
+// CAP LINES AT SESSION CLOSE — exact same as strategy_v2.pine
 // =============================================================================
-// Only show during RTH
-pm_show = is_rth and pm_locked and show_pm
-buf_show = is_rth and pm_locked and show_buf
-kl_show = is_rth and kl_computed and show_kl
-
-plot(pm_show ? pmh : na, "PMH", color=col_pmh, linewidth=pm_width, style=plot.style_linebr)
-plot(pm_show ? pml : na, "PML", color=col_pml, linewidth=pm_width, style=plot.style_linebr)
-
-plot(buf_show ? pmh + pm_buffer : na, "PMH Buffer +", color=col_buf, linewidth=1, style=plot.style_linebr)
-plot(buf_show ? pmh - pm_buffer : na, "PMH Buffer -", color=col_buf, linewidth=1, style=plot.style_linebr)
-plot(buf_show ? pml + pm_buffer : na, "PML Buffer +", color=col_buf, linewidth=1, style=plot.style_linebr)
-plot(buf_show ? pml - pm_buffer : na, "PML Buffer -", color=col_buf, linewidth=1, style=plot.style_linebr)
-
-plot(kl_show ? kl_above_1 : na, "KL Above 1", color=col_kl, linewidth=kl_width, style=plot.style_linebr)
-plot(kl_show ? kl_above_2 : na, "KL Above 2", color=col_kl, linewidth=kl_width, style=plot.style_linebr)
-plot(kl_show ? kl_above_3 : na, "KL Above 3", color=col_kl, linewidth=kl_width, style=plot.style_linebr)
-plot(kl_show ? kl_above_4 : na, "KL Above 4", color=col_kl, linewidth=kl_width, style=plot.style_linebr)
-plot(kl_show ? kl_above_5 : na, "KL Above 5", color=col_kl, linewidth=kl_width, style=plot.style_linebr)
-
-plot(kl_show ? kl_below_1 : na, "KL Below 1", color=col_kl, linewidth=kl_width, style=plot.style_linebr)
-plot(kl_show ? kl_below_2 : na, "KL Below 2", color=col_kl, linewidth=kl_width, style=plot.style_linebr)
-plot(kl_show ? kl_below_3 : na, "KL Below 3", color=col_kl, linewidth=kl_width, style=plot.style_linebr)
-plot(kl_show ? kl_below_4 : na, "KL Below 4", color=col_kl, linewidth=kl_width, style=plot.style_linebr)
-plot(kl_show ? kl_below_5 : na, "KL Below 5", color=col_kl, linewidth=kl_width, style=plot.style_linebr)
-
-plot(kl_show ? kl_sma : na, "200 SMA Level", color=col_sma, linewidth=kl_width + 1, style=plot.style_linebr)
+if session_close
+    if array.size(pm_lines) > 0
+        for i = 0 to array.size(pm_lines) - 1
+            line.set_extend(array.get(pm_lines, i), extend.none)
+            line.set_x2(array.get(pm_lines, i), bar_index)
+    if array.size(buf_lines) > 0
+        for i = 0 to array.size(buf_lines) - 1
+            line.set_extend(array.get(buf_lines, i), extend.none)
+            line.set_x2(array.get(buf_lines, i), bar_index)
+    if array.size(kl_lines) > 0
+        for i = 0 to array.size(kl_lines) - 1
+            line l = array.get(kl_lines, i)
+            if not na(l)
+                line.set_extend(l, extend.none)
+                line.set_x2(l, bar_index)
