@@ -220,7 +220,7 @@ if is_rth and pm_locked and show_kl and barstate.islast
 
     // ATH above: $0.50 increments from next whole dollar above PMH
     if is_ath
-        ath_start = math.ceil(pmh)
+        float ath_start = math.ceil(pmh)
         if math.abs(ath_start - pmh) < 0.01
             ath_start += 0.50
         for i = 0 to kl_max_side - 1
@@ -228,7 +228,7 @@ if is_rth and pm_locked and show_kl and barstate.islast
 
     // ATL below: $0.50 decrements from next whole dollar below PML
     if is_atl
-        atl_start = math.floor(pml)
+        float atl_start = math.floor(pml)
         if math.abs(atl_start - pml) < 0.01
             atl_start -= 0.50
         for i = 0 to kl_max_side - 1
